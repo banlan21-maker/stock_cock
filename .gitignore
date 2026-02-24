@@ -1,0 +1,42 @@
+# 환경변수 (API 키·시크릿 보호)
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+
+# Node
+node_modules/
+.npm
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# 빌드/캐시
+dist/
+build/
+*.log
+
+# 임시/개발용 출력
+install_log.txt
+test_output.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo

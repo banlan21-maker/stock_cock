@@ -1,0 +1,392 @@
+{
+  "timestamp": "2026-02-14T07:03:42.332Z",
+  "reason": "compaction",
+  "status": {
+    "version": "2.0",
+    "lastUpdated": "2026-02-14T07:03:30.339Z",
+    "activeFeatures": [
+      "stock-cock-service",
+      "backend",
+      "frontend",
+      "stock",
+      "[code]",
+      "dashboard"
+    ],
+    "primaryFeature": "stock-cock-service",
+    "features": {
+      "stock-cock-service": {
+        "phase": "check",
+        "matchRate": 65,
+        "iterationCount": 0,
+        "startedAt": "2026-02-14T14:50:00.000Z",
+        "documents": {
+          "plan": "docs/01-plan/features/stock-cock-service.plan.md",
+          "design": "docs/02-design/features/stock-cock-service.design.md",
+          "analysis": "docs/03-analysis/stock-cock-service.analysis.md"
+        }
+      },
+      "backend": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-14T06:28:52.742Z",
+          "lastUpdated": "2026-02-14T07:03:30.339Z"
+        },
+        "lastFile": "e:\\projects\\Stock_Cock\\backend\\app\\services\\gemini_service.py"
+      },
+      "frontend": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-14T06:29:41.023Z",
+          "lastUpdated": "2026-02-14T07:01:29.803Z"
+        },
+        "lastFile": "e:\\projects\\Stock_Cock\\frontend\\lib\\watchlist.ts"
+      },
+      "stock": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-14T06:45:11.881Z",
+          "lastUpdated": "2026-02-14T06:45:54.430Z"
+        },
+        "lastFile": "e:\\projects\\Stock_Cock\\frontend\\components\\stock\\StockChart.tsx"
+      },
+      "[code]": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-14T06:45:16.402Z",
+          "lastUpdated": "2026-02-14T07:00:49.412Z"
+        },
+        "lastFile": "e:\\projects\\Stock_Cock\\frontend\\app\\(app)\\stock\\[code]\\page.tsx"
+      },
+      "dashboard": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-14T07:01:01.041Z",
+          "lastUpdated": "2026-02-14T07:01:04.560Z"
+        },
+        "lastFile": "e:\\projects\\Stock_Cock\\frontend\\app\\(app)\\dashboard\\page.tsx"
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-02-14T05:43:40.046Z",
+      "onboardingCompleted": true,
+      "lastActivity": "2026-02-14T07:03:30.339Z"
+    },
+    "history": [
+      {
+        "action": "plan_created",
+        "feature": "stock-cock-service",
+        "timestamp": "2026-02-14T14:50:00.000Z"
+      },
+      {
+        "action": "design_created",
+        "feature": "stock-cock-service",
+        "timestamp": "2026-02-14T15:00:00.000Z"
+      },
+      {
+        "action": "do_started",
+        "feature": "stock-cock-service",
+        "timestamp": "2026-02-14T15:10:00.000Z"
+      },
+      {
+        "action": "gap_analysis",
+        "feature": "stock-cock-service",
+        "matchRate": 65,
+        "timestamp": "2026-02-14T15:30:00.000Z"
+      },
+      {
+        "timestamp": "2026-02-14T06:28:52.742Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:28:58.669Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:29:05.384Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:29:31.705Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:29:41.023Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:32:56.644Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:03.305Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:06.629Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:07.945Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:08.464Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:09.785Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:10.834Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:11.947Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:15.245Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:17.044Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:17.664Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:18.014Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:18.747Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:19.094Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:22.729Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:33:30.140Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:37:14.130Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:37:20.247Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:39:51.896Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:45:11.881Z",
+        "feature": "stock",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:45:16.402Z",
+        "feature": "[code]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:45:20.519Z",
+        "feature": "[code]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:45:54.430Z",
+        "feature": "stock",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:49:55.586Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:53:09.326Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T06:54:55.043Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:00:18.355Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:00:18.885Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:00:32.956Z",
+        "feature": "[code]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:00:40.843Z",
+        "feature": "[code]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:00:44.880Z",
+        "feature": "[code]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:00:49.412Z",
+        "feature": "[code]",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:01:01.041Z",
+        "feature": "dashboard",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:01:04.560Z",
+        "feature": "dashboard",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:01:22.116Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:01:29.803Z",
+        "feature": "frontend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:03:21.389Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:03:25.797Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-14T07:03:30.339Z",
+        "feature": "backend",
+        "phase": "do",
+        "action": "updated"
+      }
+    ]
+  }
+}
