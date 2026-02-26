@@ -531,18 +531,30 @@ Stock_Cock/
 
 ## 배포 가이드 (Deployment Guide)
 
-### 1. 프론트엔드 (Vercel)
-1. **GitHub**에 코드를 푸시합니다.
-2. **Vercel**에서 'New Project' -> 저장소 선택.
-3. **Root Directory**를 `frontend`로 지정하거나, 프로젝트 루트의 `vercel.json` 설정을 따릅니다.
-4. **Environment Variables** (필수):
-   - `NEXT_PUBLIC_API_URL`: 배포된 백엔드 주소 (예: `https://stock-cock-back.railway.app`)
-   - `NEXT_PUBLIC_SUPABASE_URL`: Supabase URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase Anon Key
+### 1. 파이어베이스 (Firebase) - **추천**
+> **장점**: 프론트엔드와 백엔드를 한 곳에서 관리할 수 있으며, AI 분석에 필요한 넉넉한 타임아웃(2분) 설정이 가능합니다.
 
-### 2. 백엔드 (Railway / Render 추천)
-> **이유**: Gemini 분석 작업은 30초 이상 소요될 수 있어 Vercel Serverless(10~30초 제한)보다는 Railway 같은 전용 호스팅이 적합합니다.
-1. **Railway**에서 'New Project' -> `backend` 폴더 선택.
-2. **Environment Variables**: `backend/.env`의 모든 내용 복사.
-3. **Start Command**: `python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`
-4. **CORS 설정**: `backend/app/main.py`의 `allow_origins`에 배포된 Vercel 도메인을 추가해야 합니다.
+1. **사전 준비**:
+   - [Firebase Console](https://console.firebase.google.com/)에서 프로젝트를 생성합니다.
+   - **Blaze 요금제(종량제)**로 업그레이드합니다. (외부 API 호출을 위해 필수, 무료 할당량이 매우 커서 실 결제금액은 거의 없음)
+   - `.firebaserc` 파일의 `your-project-id`를 본인의 프로젝트 ID로 수정합니다.
+
+2. **환경 변수 설정 (Secrets)**:
+   - Firebase Functions는 `.env` 대신 전용 Secret 관리자를 사용합니다. 아래 명령어로 필수 키를 등록합니다.
+   ```bash
+   firebase functions:secrets:set GEMINI_API_KEY
+   firebase functions:secrets:set DART_API_KEY
+   # ... (나머지 필요한 키들도 모두 등록)
+   ```
+
+3. **배포 실행**:
+   ```bash
+   # Firebase CLI 설치 필요
+   npm install -g firebase-tools
+   firebase login
+   firebase deploy
+   ```
+
+### 2. 프론트엔드 (Vercel) / 백엔드 (Railway)
+- 프론트엔드는 Vercel, 백엔드는 Railway에 각각 배포하는 방식입니다. (Vercel은 10초 타임아웃 제한이 있어 백엔드용으로는 부적합합니다.)
+- 자세한 설정 방법은 `vercel.json`을 참고하세요.
