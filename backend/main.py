@@ -25,3 +25,10 @@ from app.main import app
 @https_fn.on_request(timeout_sec=120, memory=1024, secrets=_SECRETS)
 def api(req: https_fn.Request) -> https_fn.Response:
     return https_fn.handle_asgi_request(app, req)
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    # Cloud Run/App Hosting은 PORT 환경변수를 제공함 (기본 8080)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)

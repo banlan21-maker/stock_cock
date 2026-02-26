@@ -532,26 +532,25 @@ Stock_Cock/
 ## 배포 가이드 (Deployment Guide)
 
 ### 1. 파이어베이스 (Firebase) - **추천**
-> **장점**: 프론트엔드와 백엔드를 한 곳에서 관리할 수 있으며, AI 분석에 필요한 넉넉한 타임아웃(2분) 설정이 가능합니다.
+> **장점**: 프론트엔드와 백엔드를 Firebase App Hosting 및 Cloud Run을 통해 통합 관리할 수 있습니다.
 
-1. **사전 준비**:
-   - [Firebase Console](https://console.firebase.google.com/)에서 프로젝트를 생성합니다.
-   - **Blaze 요금제(종량제)**로 업그레이드합니다. (외부 API 호출을 위해 필수, 무료 할당량이 매우 커서 실 결제금액은 거의 없음)
-   - `.firebaserc` 파일의 `your-project-id`를 본인의 프로젝트 ID로 수정합니다.
+1. **프론트엔드 (App Hosting)**:
+   - Firebase Console에서 App Hosting 서비스를 생성하고 GitHub 저장소를 연결합니다.
+   - 루트 디렉터리 기반으로 Next.js 앱(`frontend` 폴더)이 자동 빌드 및 배포됩니다.
 
-2. **환경 변수 설정 (Secrets)**:
-   - Firebase Functions는 `.env` 대신 전용 Secret 관리자를 사용합니다. 아래 명령어로 필수 키를 등록합니다.
+2. **백엔드 (Cloud Run)**:
+   - `backend` 폴더의 `Dockerfile`을 사용하여 Cloud Run에 배포합니다.
+   - **중요**: Cloud Run은 `PORT` 환경변수(기본 8080)를 사용하므로, `main.py` 또는 `Dockerfile`에서 이를 처리해야 합니다.
+   - 환경 변수(Secrets)는 Google Cloud Secret Manager에 등록하거나 Cloud Run 설정에서 직접 입력합니다.
+
+3. **환경 변수 설정**:
+   - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` 등 필수 키를 설정합니다.
+   - 프론트엔드 `.env.production`의 `NEXT_PUBLIC_API_URL`을 배포된 백엔드 URL로 업데이트합니다.
+
+4. **배포 실행**:
    ```bash
-   firebase functions:secrets:set GEMINI_API_KEY
-   firebase functions:secrets:set DART_API_KEY
-   # ... (나머지 필요한 키들도 모두 등록)
-   ```
-
-3. **배포 실행**:
-   ```bash
-   # Firebase CLI 설치 필요
-   npm install -g firebase-tools
-   firebase login
-   firebase deploy
+   # 백엔드 배포 (gcloud CLI 필요)
+   cd backend
+   gcloud run deploy stock-cock-backend --source . --region asia-east1 --allow-unauthenticated
    ```
 .
