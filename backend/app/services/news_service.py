@@ -290,6 +290,7 @@ async def get_news_summary(news_id: str) -> dict | None:
         return {
             "id": news["id"],
             "title": news["title"],
+            "url": news.get("url"),
             "ai_summary": "해당 기사는 [포토]/[인사]/[부고] 또는 광고성 기사로 분류되어 AI 분석을 제공하지 않습니다.",
             "related_stocks": [],
         }
@@ -320,6 +321,7 @@ async def get_news_summary(news_id: str) -> dict | None:
         result = {
             "id": news["id"],
             "title": news["title"],
+            "url": news.get("url"),
             "ai_summary": parsed.get("summary", ""),
             "related_stocks": parsed.get("related_stocks", []),
             "impact_strength": impact,
@@ -342,6 +344,7 @@ async def get_news_summary(news_id: str) -> dict | None:
         return {
             "id": news["id"],
             "title": news["title"],
+            "url": news.get("url"),
             "ai_summary": f"AI 요약 생성 중 오류가 발생했습니다: {str(e)}",
             "related_stocks": [],
         }

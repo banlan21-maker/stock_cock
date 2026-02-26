@@ -11,17 +11,17 @@ from app.utils.supabase_client import get_supabase
 logger = logging.getLogger(__name__)
 
 TABLE = "news_cache"
-CACHE_TTL_HOURS = 1
+CACHE_TTL_HOURS = 24
 
 
 def get_cached_summary(news_id: str) -> dict | None:
-    """캐시된 AI 요약이 있고 유효기간(1시간) 내이면 반환, 없거나 만료면 None."""
+    """캐시된 AI 요약이 있고 유효기간(24시간) 내이면 반환, 없거나 만료면 None."""
     try:
         supabase = get_supabase()
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=CACHE_TTL_HOURS)).isoformat()
         r = (
             supabase.table(TABLE)
-            .select("id, title, ai_summary, related_stocks, impact_strength, created_at")
+            .select("id, title, ai_summary, related_stocks, impact_strength, url, created_at")
             .eq("id", news_id)
             .gte("created_at", cutoff)
             .limit(1)
@@ -35,6 +35,7 @@ def get_cached_summary(news_id: str) -> dict | None:
                 "ai_summary": row.get("ai_summary") or "",
                 "related_stocks": row.get("related_stocks") or [],
                 "impact_strength": row.get("impact_strength") or "",
+                "url": row.get("url"),
             }
         return None
     except Exception as e:

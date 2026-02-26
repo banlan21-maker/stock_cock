@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # 테마 트렌드 TTL (Supabase generic_kv_cache 에 저장)
-#   daily  → 30분 TTL  (장중 변동 반영)
-#   weekly → 4시간 TTL (주간 데이터는 천천히 변함)
+#   daily  → 1시간 TTL (자주 보지만 1시간이면 충분)
+#   weekly → 24시간 TTL (주간 데이터는 하루 한 번이면 충분)
 # ---------------------------------------------------------------------------
-_CACHE_TTL_DAILY  = 30 * 60       # 30분 (초)
-_CACHE_TTL_WEEKLY = 4 * 60 * 60   # 4시간 (초)
+_CACHE_TTL_DAILY  = 60 * 60        # 1시간 (초)
+_CACHE_TTL_WEEKLY = 24 * 60 * 60   # 24시간 (초)
 _CACHE_TTL_DASHBOARD = 5 * 60     # 대시보드 5분 (초)
 
 

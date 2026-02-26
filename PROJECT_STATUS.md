@@ -9,16 +9,17 @@
 
 | 구분 | 기술 |
 |------|------|
-| **프론트엔드** | Next.js 16 (App Router, TypeScript), Tailwind CSS, Recharts |
-| **백엔드** | FastAPI (Python), uvicorn |
-| **AI 분석** | Google Gemini 2.0 Flash |
-| **데이터베이스** | Supabase (PostgreSQL) |
-| **주식 데이터** | pykrx (국내 우선), FinanceDataReader (FDR 폴백) |
+| **프론트엔드** | Next.js 14/15 (App Router, TypeScript), Tailwind CSS, Recharts |
+| **백엔드** | FastAPI (Python), uvicorn, slowapi (Rate Limit) |
+| **AI 분석** | Google Gemini 2.0 Flash (Streaming SSE 지원) |
+| **데이터베이스** | Supabase (PostgreSQL, RLS 적용) |
+| **주식 데이터** | pykrx (국내 수급/지표), FinanceDataReader (FDR 시세/차트) |
 | **뉴스 데이터** | 네이버 뉴스 검색 API (국내), NewsAPI.org (해외) |
-| **정책 데이터** | 정책브리핑(korea.kr) RSS |
+| **정책 데이터** | 정책브리핑(korea.kr) RSS + PDF 텍스트 추출 |
 | **공시 데이터** | DART 전자공시 API (OpenDartReader) |
-| **인증** | Supabase Auth (JWT) |
-| **캐시** | Supabase `analysis_cache`, `generic_kv_cache`, `news_cache`, `policy_cache`, `policy_news` |
+| **수익 구조** | Reward Ads (Google AdMob 스타일 UI) 연동 |
+| **인증** | Supabase Auth (Email/Password, Social) |
+| **캐시** | Supabase 전용 테이블 (`analysis_cache`, `generic_kv_cache`, `news_cache`, `policy_news`) |
 
 ---
 
@@ -64,11 +65,10 @@ cd frontend && npm run dev
 | 테이블 | 용도 | TTL / 보존 |
 |--------|------|-----------|
 | `analysis_cache` | 종목 AI 분석 결과 | 24시간 |
-| `generic_kv_cache` | 테마 트렌드·대시보드·공시·포트폴리오 수익률 캐시 | 5분~4시간 |
-| `news_cache` | 뉴스 AI 요약·관련 종목 | 7일 경과 시 cron 정리 |
-| `policy_cache` | 정책 AI 분석 캐시 (폴백용) | 7일 경과 시 cron 정리 |
-| `policy_news` | 정책 RSS 원문 + AI 분석 결과 | 영구 |
-| `portfolio_holdings` | 사용자 보유 종목 | 영구 |
+| `generic_kv_cache` | 테마 트렌드·대시보드·공시 목록·수익률 캐시 | 5분 ~ 24시간 |
+| `news_cache` | 뉴스 AI 요약 + 원문 URL | 24시간 (분석 갱신 주기) |
+| `policy_news` | 정책 원문 + PDF 추출 텍스트 + AI 분석 결과 | 노출 기간(약 3일) 기반 |
+| `portfolio_holdings` | 사용자 보유 종목 및 관심 종목 | 영구 |
 
 ```sql
 -- generic_kv_cache 생성 SQL
@@ -181,7 +181,7 @@ Stock_Cock/
 | 전환 | 일간(오늘) / 주간(최근 5거래일), 정렬: 등락률 / 거래대금 |
 | 데이터 출처 | pykrx (주말·공휴일 자동 최근 거래일 탐색) → FDR 폴백 |
 | AI | Gemini 2.0 Flash (등락률·거래대금 상위 150+150 병합 후 테마 분류) |
-| 캐시 | 일간 30분 TTL / 주간 4시간 TTL (Supabase `generic_kv_cache`) |
+| 캐시 | 일간 1시간 TTL / 주간 24시간 TTL (Supabase `generic_kv_cache`) |
 | 성능 | 서버 시작 시 테마 트렌드·대시보드 선행 계산(warm-up) |
 
 #### 시장 현황
@@ -244,8 +244,10 @@ Stock_Cock/
 | 항목 | 내용 |
 |------|------|
 | 데이터 출처 | 원문: 네이버/NewsAPI / AI: Gemini 2.0 Flash |
-| 캐시 | Supabase `news_cache` (영구 보존) |
+| 캐시 | Supabase `news_cache` (24시간 TTL 적용) |
 | 해외 뉴스 | 번역+분석 통합 프롬프트 (별도 처리) |
+| 원문 보기 | 분석 하단 '원문 보기' 버튼을 통해 원글로 즉시 이동 가능 (URL 전달 로직 보강) |
+| 레이아웃 | 모든 섹션 간격(space-y-5) 및 카드 패딩 통일 |
 
 ---
 
@@ -282,7 +284,9 @@ Stock_Cock/
 |------|------|
 | 데이터 출처 | 정책브리핑 RSS + 첨부 PDF 내용 자동 추출 |
 | AI | Gemini 2.0 Flash |
-| 캐시 | Supabase `policy_news.ai_summary`, `ai_stocks` 컬럼 (영구) |
+| 캐시 | Supabase `policy_news` 내 통합 저장 (유동적 갱신) |
+| 레이아웃 | 뉴스 상세와 동일한 카드 스타일 및 간격(space-y-5) 적용 |
+| 원문 보기 | 분석 하단 '원문 보기' 버튼을 통해 정책브리핑 사이트로 이동 |
 
 ---
 
@@ -334,10 +338,11 @@ Stock_Cock/
 |------|------|
 | 기능 | 오늘 발표된 주요 DART 공시 목록 (최대 30건) |
 | 표시 | 기업명, 종목코드, 공시명, 접수일, 제출인 |
-| AI 분석 | 공시 클릭 시 꼰대아저씨 AI 분석 즉시 로드 (호재/악재/중립 판정) |
+| AI 분석 | 공시 클릭 시 꼰대아저씨 AI 분석 로드 (호재/악재/중립 판정) |
+| 비즈니스 모델| **Reward Ads** 연동: 광고 시청 시 AI 분석 결과 잠금 해제 (UI 구현 완료) |
 | 분석 내용 | 요약, 감성(호재/악재/중립), 투자 인사이트, 주의사항 |
 | 데이터 출처 | DART 전자공시 API (OpenDartReader) |
-| 캐시 | `generic_kv_cache` (공시 목록 1시간, 분석 결과 영구) |
+| 캐시 | `generic_kv_cache` (공시 목록 30분, 분석 결과 24시간) |
 | Rate Limit | 10/분 |
 
 ---
@@ -521,3 +526,23 @@ Stock_Cock/
 
 #### 8. 다크/라이트 테마 전환
 - 현재 다크 모드 고정 → 라이트 모드 선택지 추가
+
+---
+
+## 배포 가이드 (Deployment Guide)
+
+### 1. 프론트엔드 (Vercel)
+1. **GitHub**에 코드를 푸시합니다.
+2. **Vercel**에서 'New Project' -> 저장소 선택.
+3. **Root Directory**를 `frontend`로 지정하거나, 프로젝트 루트의 `vercel.json` 설정을 따릅니다.
+4. **Environment Variables** (필수):
+   - `NEXT_PUBLIC_API_URL`: 배포된 백엔드 주소 (예: `https://stock-cock-back.railway.app`)
+   - `NEXT_PUBLIC_SUPABASE_URL`: Supabase URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase Anon Key
+
+### 2. 백엔드 (Railway / Render 추천)
+> **이유**: Gemini 분석 작업은 30초 이상 소요될 수 있어 Vercel Serverless(10~30초 제한)보다는 Railway 같은 전용 호스팅이 적합합니다.
+1. **Railway**에서 'New Project' -> `backend` 폴더 선택.
+2. **Environment Variables**: `backend/.env`의 모든 내용 복사.
+3. **Start Command**: `python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`
+4. **CORS 설정**: `backend/app/main.py`의 `allow_origins`에 배포된 Vercel 도메인을 추가해야 합니다.
