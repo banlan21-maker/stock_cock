@@ -23,7 +23,7 @@ def _get_model():
             "Gemini API 키가 설정되지 않았습니다. backend/.env에 GEMINI_API_KEY를 넣어 주세요."
         )
     genai.configure(api_key=api_key)
-    _model_instance = genai.GenerativeModel("gemini-2.0-flash")
+    _model_instance = genai.GenerativeModel("gemini-2.5-flash")
     return _model_instance
 
 
