@@ -554,7 +554,4 @@ Stock_Cock/
    firebase login
    firebase deploy
    ```
-
-### 2. 프론트엔드 (Vercel) / 백엔드 (Railway)
-- 프론트엔드는 Vercel, 백엔드는 Railway에 각각 배포하는 방식입니다. (Vercel은 10초 타임아웃 제한이 있어 백엔드용으로는 부적합합니다.)
-- 자세한 설정 방법은 `vercel.json`을 참고하세요.
+.

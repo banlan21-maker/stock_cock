@@ -72,7 +72,10 @@ app.add_middleware(
         settings.frontend_url,
         "http://localhost:3001",
         "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001"
+        "http://127.0.0.1:3001",
+        # Firebase Hosting 도메인
+        "https://banlan-stockcock.web.app",
+        "https://banlan-stockcock.firebaseapp.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],

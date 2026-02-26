@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  --background: #001F3F;
+  --foreground: #ededed;
+  --ad-banner-height: 50px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-navy: #001F3F;
+  --color-navy-light: #003366;
+  --color-skyblue: #0074D9;
+  --color-positive: #22C55E;
+  --color-negative: #EF4444;
+  --color-neutral: #6B7280;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* 하단 광고: 무조건 50px 고정. 스크립트/iframe이 커져도 잘림 */
+.ad-banner-slot {
+  height: 50px !important;
+  min-height: 50px !important;
+  max-height: 50px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  background-color: #001F3F !important;
+  /* 배경색 명시 */
+}
+
+.ad-banner-slot .adsbygoogle,
+.ad-banner-slot ins.adsbygoogle {
+  /* 내부 ins 태그는 높이 제약을 풀어주어 AdSense 스크립트가 렌더링을 포기하지 않게 함 */
+  display: block !important;
+  width: 100% !important;
+}
+
+.ad-banner-slot iframe {
+  /* iframe도 부모가 자르므로 높이 제약을 약간 완화하여 로드 허용 */
+  width: 100% !important;
+}

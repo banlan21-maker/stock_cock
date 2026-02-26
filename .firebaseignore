@@ -1,0 +1,16 @@
+**/.git
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/.env
+**/.env.local
+**/venv
+**/.venv
+frontend/.next
+frontend/out
+backend/db
+backend/docs_cache
+backend/scripts
+backend/supabase_schema
+backend/check_imports.py
+backend/create_user.py

@@ -5,7 +5,10 @@ from functools import lru_cache
 
 # 백엔드 루트(backend/) 기준 .env 경로 (프로젝트 루트에서 실행해도 로드되도록)
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
-_ENV_FILE = _BACKEND_DIR / ".env"
+# 우선순위: .env.local (로컬 개발용) -> .env (배포 시 Firebase가 자동 생성할 수도 있음)
+_ENV_FILE_LOCAL = _BACKEND_DIR / ".env.local"
+_ENV_FILE_DEFAULT = _BACKEND_DIR / ".env"
+_ENV_FILE = _ENV_FILE_LOCAL if _ENV_FILE_LOCAL.exists() else _ENV_FILE_DEFAULT
 
 
 def _load_env_file():
