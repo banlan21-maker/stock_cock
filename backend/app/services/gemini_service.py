@@ -3,63 +3,45 @@ import json
 import logging
 import re
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Gemini 모델 싱글턴 (configure + 모델 생성을 한 번만 수행)
-_model_instance = None
+_client_instance = None
+_MODEL_NAME = "gemini-2.5-flash"
 
 
-def _get_model():
-    global _model_instance
-    if _model_instance is not None:
-        return _model_instance
+def _get_client() -> genai.Client:
+    global _client_instance
+    if _client_instance is not None:
+        return _client_instance
     settings = get_settings()
     api_key = (settings.gemini_api_key or "").strip()
     if not api_key:
         raise ValueError(
             "Gemini API 키가 설정되지 않았습니다. backend/.env에 GEMINI_API_KEY를 넣어 주세요."
         )
-    genai.configure(api_key=api_key)
-    _model_instance = genai.GenerativeModel("gemini-2.5-flash")
-    return _model_instance
+    _client_instance = genai.Client(api_key=api_key)
+    return _client_instance
 
 
-_GEMINI_TIMEOUT = 55  # Gemini API 단일 호출 타임아웃 (초)
-
-
-async def _call_with_retry(model, prompt, generation_config=None, max_retries: int = 3):
-    """Gemini API 호출 + 429/5xx 시 지수 백오프 재시도.
-
-    model.generate_content()는 동기 함수이므로 run_in_executor로 실행하여
-    FastAPI 이벤트 루프가 블로킹되지 않도록 한다.
-    """
-    loop = asyncio.get_event_loop()
-    request_options = {"timeout": _GEMINI_TIMEOUT}
+async def _call_with_retry(prompt, config=None, max_retries: int = 3):
+    """Gemini API 호출 + 429/5xx 시 지수 백오프 재시도 (네이티브 async)."""
+    client = _get_client()
     last_error = None
     for attempt in range(max_retries):
         try:
-            if generation_config:
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: model.generate_content(
-                        prompt,
-                        generation_config=generation_config,
-                        request_options=request_options,
-                    ),
-                )
-            else:
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: model.generate_content(prompt, request_options=request_options),
-                )
+            response = await client.aio.models.generate_content(
+                model=_MODEL_NAME,
+                contents=prompt,
+                config=config,
+            )
             return response.text
         except Exception as e:
             last_error = e
             err_str = str(e)
-            # 429 (rate limit) 또는 5xx 서버 에러만 재시도
             is_retryable = "429" in err_str or "Resource exhausted" in err_str or "500" in err_str or "503" in err_str
             if is_retryable and attempt < max_retries - 1:
                 wait = 2 ** attempt * 2  # 2초, 4초, 8초
@@ -118,7 +100,6 @@ AI의 한마디: "(투자자에게 전달할 핵심 조언 한 문장)"
 
 async def summarize_news(title: str, content: str) -> str:
     """뉴스를 투자 로직 분석(3단계)으로 심층 분석하고 관련 종목을 추천한다."""
-    model = _get_model()
     prompt = f"""{_NEWS_ANALYSIS_PROMPT}
 
 ---
@@ -137,12 +118,11 @@ async def summarize_news(title: str, content: str) -> str:
   "impact_strength": "매우 높음 또는 높음 또는 보통 또는 낮음"
 }}
 """
-    return await _call_with_retry(model, prompt)
+    return await _call_with_retry(prompt)
 
 
 async def translate_and_summarize_news(title: str, content: str) -> str:
     """영문 해외뉴스를 한국어로 번역 후, 투자 로직 분석으로 심층 분석한다."""
-    model = _get_model()
     prompt = f"""먼저 아래 영어 뉴스를 한국어로 자연스럽게 번역한 뒤, {_NEWS_ANALYSIS_PROMPT}
 
 ---
@@ -163,7 +143,7 @@ async def translate_and_summarize_news(title: str, content: str) -> str:
   "impact_strength": "매우 높음 또는 높음 또는 보통 또는 낮음"
 }}
 """
-    return await _call_with_retry(model, prompt)
+    return await _call_with_retry(prompt)
 
 
 _POLICY_ANALYSIS_PROMPT = """# [주식콕] 정책 투자 로직 분석 지침
@@ -214,7 +194,6 @@ AI의 한마디: "(투자자에게 전달할 핵심 조언 한 문장)"
 
 async def analyze_policy(title: str, description: str) -> str:
     """정책을 투자 로직 분석(3단계)으로 심층 분석하고 수혜주/피해주를 추천한다."""
-    model = _get_model()
     prompt = f"""{_POLICY_ANALYSIS_PROMPT}
 
 ---
@@ -233,7 +212,7 @@ async def analyze_policy(title: str, description: str) -> str:
   "impact_strength": "상 또는 중 또는 하"
 }}
 """
-    return await _call_with_retry(model, prompt)
+    return await _call_with_retry(prompt)
 
 
 def _format_structured_input(data: dict) -> str:
@@ -331,7 +310,6 @@ def _is_old_report_format(cached_data: dict) -> bool:
     """캐시된 분석이 구 형식(items 없음)인지 여부."""
     if not cached_data:
         return True
-    # 새 형식은 ai_report가 JSON 문자열(items 포함)
     report = cached_data.get("ai_report", "")
     if not report:
         return True
@@ -344,7 +322,6 @@ def _is_old_report_format(cached_data: dict) -> bool:
 
 async def analyze_stock(stock_name: str, stock_code: str, structured_data: dict) -> str:
     """[주식콕 심장] 종목 분석 - 항목별 카드 JSON 출력."""
-    model = _get_model()
     data_str = _format_structured_input(structured_data)
 
     prompt = f"""{ANALYSIS_PROMPT_TEMPLATE}
@@ -368,19 +345,12 @@ async def analyze_stock(stock_name: str, stock_code: str, structured_data: dict)
   "overall_comment": "종합 한줄평"
 }}
 """
-    gen_config = genai.types.GenerationConfig(temperature=0.3)
-    return await _call_with_retry(model, prompt, generation_config=gen_config)
+    config = types.GenerateContentConfig(temperature=0.3)
+    return await _call_with_retry(prompt, config=config)
 
 
 async def compare_stocks(stock_a: dict, stock_b: dict) -> str:
-    """두 종목의 투자가치를 비교 분석한다.
-
-    Args:
-        stock_a / stock_b: _format_structured_input()이 받는 것과 같은 structured dict
-    Returns:
-        JSON 문자열
-    """
-    model = _get_model()
+    """두 종목의 투자가치를 비교 분석한다."""
     a_str = _format_structured_input(stock_a)
     b_str = _format_structured_input(stock_b)
 
@@ -427,13 +397,12 @@ async def compare_stocks(stock_a: dict, stock_b: dict) -> str:
   "caution": "투자 시 주의사항 1줄"
 }}
 """
-    gen_config = genai.types.GenerationConfig(temperature=0.3)
-    return await _call_with_retry(model, prompt, generation_config=gen_config)
+    config = types.GenerateContentConfig(temperature=0.3)
+    return await _call_with_retry(prompt, config=config)
 
 
 async def analyze_disclosure(rcp_no: str, report_nm: str, corp_name: str, content: str) -> str:
     """DART 공시 내용을 꼰대아저씨 스타일로 분석한다."""
-    model = _get_model()
     prompt = f"""너는 30년 경력의 주식 고수 '꼰대아저씨'야. DART 공시 서류의 딱딱한 내용을 분석해서 초보자도 알기 쉽게 설명해줘.
 
 [페르소나 규칙]
@@ -458,13 +427,12 @@ async def analyze_disclosure(rcp_no: str, report_nm: str, corp_name: str, conten
   "insight": "투자자에게 꼰대아저씨가 전하는 핵심 조언 (2~3문장, 꼰대 말투)",
   "caution": "주의사항 1줄 (없으면 빈 문자열)"
 }}"""
-    gen_config = genai.types.GenerationConfig(temperature=0.4)
-    return await _call_with_retry(model, prompt, generation_config=gen_config)
+    config = types.GenerateContentConfig(temperature=0.4)
+    return await _call_with_retry(prompt, config=config)
 
 
 async def analyze_journal_entry(entry: dict) -> str:
     """투자일지 항목에 대해 꼰대아저씨 스타일 피드백을 한두 문장으로 반환한다."""
-    model = _get_model()
     action_kr = "매수" if entry.get("action") == "buy" else "매도"
     total = float(entry.get("price", 0)) * float(entry.get("quantity", 0))
     prompt = f"""너는 30년 경력의 주식 고수 '꼰대아저씨'야.
@@ -486,17 +454,12 @@ async def analyze_journal_entry(entry: dict) -> str:
 - JSON이나 마크다운 없이 순수 텍스트만 출력
 
 피드백:"""
-    gen_config = genai.types.GenerationConfig(temperature=0.7)
-    return await _call_with_retry(model, prompt, generation_config=gen_config)
+    config = types.GenerateContentConfig(temperature=0.7)
+    return await _call_with_retry(prompt, config=config)
 
 
 async def extract_stocks_from_keyword(keyword: str) -> list[dict]:
-    """키워드로부터 관련 한국 상장 종목 10개를 Gemini 지식 베이스로 추출한다.
-
-    Returns:
-        [{"code": "005930", "name": "삼성전자", "reason": "왜 추천하는지 한 문장"}, ...]
-    """
-    model = _get_model()
+    """키워드로부터 관련 한국 상장 종목 10개를 Gemini 지식 베이스로 추출한다."""
     prompt = f"""당신은 한국 주식시장 전문가입니다.
 키워드 "{keyword}"와 관련된 한국거래소(KRX) 상장 종목을 최대 10개 추출해주세요.
 
@@ -513,7 +476,7 @@ async def extract_stocks_from_keyword(keyword: str) -> list[dict]:
   ...
 ]"""
     try:
-        raw = await _call_with_retry(model, prompt)
+        raw = await _call_with_retry(prompt)
         match = re.search(r'\[.*\]', raw, re.DOTALL)
         if not match:
             return []
