@@ -76,6 +76,8 @@ app.add_middleware(
         # Firebase Hosting 도메인
         "https://banlan-stockcock.web.app",
         "https://banlan-stockcock.firebaseapp.com",
+        # Firebase App Hosting 도메인
+        "https://stock-cock-frontend--banlan-stockcock.asia-east1.hosted.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
