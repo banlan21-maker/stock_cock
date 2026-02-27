@@ -17,14 +17,30 @@ _SECRETS = [
     DART_API_KEY, FRONTEND_URL,
 ]
 
-from app.main import app
+from app.main import app as _asgi_app
+from a2wsgi import ASGIMiddleware
 
-# FastAPI 앱을 Firebase https 함수로 노출
-# timeout=120: AI 분석 시간을 고려하여 2분으로 설정
-# memory=1024: 분석 라이브러리 실행을 위해 1GB 할당
+# ASGI(FastAPI) → WSGI 브릿지 (handle_asgi_request 버전 호환 문제 우회)
+_wsgi_app = ASGIMiddleware(_asgi_app)
+
+
 @https_fn.on_request(timeout_sec=120, memory=1024, secrets=_SECRETS)
 def api(req: https_fn.Request) -> https_fn.Response:
-    return https_fn.handle_asgi_request(app, req)
+    chunks: list[bytes] = []
+    status_info: list = [200, []]
+
+    def start_response(status: str, headers: list, exc_info=None):
+        status_info[0] = int(status.split(" ", 1)[0])
+        status_info[1] = headers
+
+    for chunk in _wsgi_app(req.environ, start_response):
+        chunks.append(chunk)
+
+    return https_fn.Response(
+        response=b"".join(chunks),
+        status=status_info[0],
+        headers=dict(status_info[1]),
+    )
 
 if __name__ == "__main__":
     import uvicorn
