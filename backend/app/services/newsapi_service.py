@@ -70,10 +70,9 @@ async def _translate_titles_batch(titles: list[str]) -> list[str]:
     if not uncached_titles:
         return result  # 모두 캐시 히트
 
-    # Gemini 번역 (재시도 1회만, 타임아웃 10초)
+    # Gemini 번역 (타임아웃 10초)
     try:
-        from app.services.gemini_service import _get_model
-        model = _get_model()
+        from app.services.gemini_service import _call_with_retry
         prompt = f"""아래 영문 뉴스 제목들을 한국어로 자연스럽게 번역해주세요.
 반드시 JSON 배열만 출력하세요. 다른 텍스트 없이.
 입력 개수와 동일한 개수의 번역 결과를 같은 순서로 반환하세요.
@@ -85,9 +84,7 @@ async def _translate_titles_batch(titles: list[str]) -> list[str]:
 
         # 10초 타임아웃 적용
         text = await asyncio.wait_for(
-            asyncio.get_event_loop().run_in_executor(
-                None, lambda: model.generate_content(prompt).text
-            ),
+            _call_with_retry(prompt, max_retries=1),
             timeout=10.0,
         )
         text = text.strip()

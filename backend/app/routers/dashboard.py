@@ -426,7 +426,7 @@ async def _classify_themes(stocks: list[dict]) -> list[dict]:
 예: {{"005930": "HBM/고대역폭메모리", "000660": "AI 서버/데이터센터"}}"""
 
     try:
-        raw = await gemini_service._call_with_retry(gemini_service._get_model(), prompt)
+        raw = await gemini_service._call_with_retry(prompt)
         # JSON 추출
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not match:

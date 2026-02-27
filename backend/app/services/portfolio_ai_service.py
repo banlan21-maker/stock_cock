@@ -5,7 +5,7 @@ import json
 import logging
 from typing import AsyncGenerator
 
-from app.services.gemini_service import _get_model, _call_with_retry
+from app.services.gemini_service import _call_with_retry
 from app.services.generic_cache_service import get_generic_cache, set_generic_cache
 from app.utils.sse import sse_event as _sse_event
 
@@ -74,9 +74,8 @@ async def analyze_portfolio_stream(user_id: str, holdings: list[dict]) -> AsyncG
     yield _sse_event("status", {"step": 2, "message": "AI 진단 중..."})
 
     try:
-        model = _get_model()
         prompt = _build_portfolio_prompt(holdings)
-        raw = await _call_with_retry(model, prompt)
+        raw = await _call_with_retry(prompt)
 
         # JSON 파싱
         raw = raw.strip()
