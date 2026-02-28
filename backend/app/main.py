@@ -20,26 +20,13 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """서버 시작/종료 시 실행되는 lifespan 컨텍스트."""
-    # ── 시작: 테마 캐시 warm-up + 백그라운드 자동 갱신 시작 ──
-    bg_tasks: list[asyncio.Task] = []
-    try:
-        from app.services.warmup_service import warmup_all, start_background_tasks
-        # warm-up은 별도 태스크로 띄워서 서버 시작을 블록하지 않음
-        asyncio.create_task(warmup_all(), name="startup-warmup")
-        bg_tasks = await start_background_tasks()
-        logger.info("백그라운드 테마 갱신 태스크 시작 완료")
-    except Exception as e:
-        logger.warning("warm-up 서비스 초기화 실패 (서버는 정상 가동): %s", e)
+    """서버 시작/종료 시 실행되는 lifespan 컨텍스트.
 
+    NOTE: warmup_all()은 동기 Supabase 호출(get_generic_cache)을 내부적으로 수행하므로
+    asyncio 이벤트 루프를 블록하여 첫 번째 요청이 무한 대기 상태에 빠지는 문제가 있습니다.
+    캐시 pre-warm은 제거하고 첫 실제 요청 시 on-demand로 채워지도록 합니다.
+    """
     yield
-
-    # ── 종료: 백그라운드 태스크 정리 ──
-    for t in bg_tasks:
-        t.cancel()
-    if bg_tasks:
-        await asyncio.gather(*bg_tasks, return_exceptions=True)
-    logger.info("백그라운드 태스크 정리 완료")
 
 
 app = FastAPI(
