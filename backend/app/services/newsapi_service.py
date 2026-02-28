@@ -82,10 +82,10 @@ async def _translate_titles_batch(titles: list[str]) -> list[str]:
 
 출력 예시: ["번역된 제목1", "번역된 제목2", ...]"""
 
-        # 10초 타임아웃 적용
+        # 30초 타임아웃 적용 (Gemini 응답 지연 대응)
         text = await asyncio.wait_for(
             _call_with_retry(prompt, max_retries=1),
-            timeout=10.0,
+            timeout=30.0,
         )
         text = text.strip()
         if text.startswith("```"):

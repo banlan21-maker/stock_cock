@@ -20,8 +20,11 @@ def _sse_event(event: str, data: dict) -> str:
 
 
 @router.get("/search")
-def search(q: str = Query(..., min_length=1, description="종목명 또는 코드")):
-    results = stock_service.search_stocks(q)
+async def search(q: str = Query(..., min_length=1, description="종목명 또는 코드")):
+    try:
+        results = await asyncio.to_thread(stock_service.search_stocks, q)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"종목 검색 실패: {str(e)}")
     return {"results": results, "total": len(results)}
 
 
@@ -73,20 +76,20 @@ async def compare_stocks(
 
 
 @router.get("/{code}/price")
-def get_price(code: str):
-    result = stock_service.get_stock_price(code)
+async def get_price(code: str):
+    result = await stock_service.get_stock_price_async(code)
     if not result:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다.")
     return result
 
 
 @router.get("/{code}/chart")
-def get_chart(
+async def get_chart(
     code: str,
     period: str = Query("3m", description="1m / 3m / 6m / 1y"),
     interval: str = Query("daily", description="daily / weekly"),
 ):
-    result = stock_service.get_chart_data(code, period=period, interval=interval)
+    result = await stock_service.get_chart_data_async(code, period=period, interval=interval)
     if not result:
         raise HTTPException(status_code=404, detail="차트 데이터를 가져올 수 없습니다.")
     return result
