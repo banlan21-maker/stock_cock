@@ -19,5 +19,3 @@ OpenDartReader
 openpyxl
 firebase-functions
 firebase-admin
-a2wsgi
-nest_asyncio
