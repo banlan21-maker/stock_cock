@@ -17,19 +17,27 @@ _SECRETS = [
     DART_API_KEY, FRONTEND_URL,
 ]
 
-import nest_asyncio
-nest_asyncio.apply()
+import logging
+import sys
+
+_logger = logging.getLogger(__name__)
+
+# nest_asyncio를 제거: Firebase Functions Python 런타임은 동기(Flask 기반)이므로
+# 중첩 이벤트 루프가 불필요하고, Python 3.12 에서 호환성 문제를 유발할 수 있음.
 
 from app.main import app as _asgi_app
 from a2wsgi import ASGIMiddleware
 
-# ASGI(FastAPI) → WSGI 브릿지
-_wsgi_app = ASGIMiddleware(_asgi_app, wait_time=10.0)
+# ASGI(FastAPI) → WSGI 브릿지 (wait_time 늘림: 패키지 임포트 포함 콜드 스타트 대응)
+_wsgi_app = ASGIMiddleware(_asgi_app, wait_time=60.0)
+
+_logger.info("a2wsgi ASGIMiddleware 초기화 완료")
 
 
 @https_fn.on_request(timeout_sec=120, memory=1024, secrets=_SECRETS)
 def api(req: https_fn.Request) -> https_fn.Response:
     try:
+        print(f"[api] {req.method} {req.path}", file=sys.stderr, flush=True)
         environ = req.environ
         status_code = [200]
         headers = [[]]
@@ -37,8 +45,11 @@ def api(req: https_fn.Request) -> https_fn.Response:
         def start_response(status, response_headers, exc_info=None):
             status_code[0] = int(status.split()[0])
             headers[0] = response_headers
+            print(f"[api] start_response: {status}", file=sys.stderr, flush=True)
 
+        print("[api] calling _wsgi_app", file=sys.stderr, flush=True)
         result = _wsgi_app(environ, start_response)
+        print(f"[api] _wsgi_app returned: {type(result).__name__}", file=sys.stderr, flush=True)
 
         chunks = []
         for chunk in result:
@@ -47,14 +58,17 @@ def api(req: https_fn.Request) -> https_fn.Response:
         if hasattr(result, "close"):
             result.close()
 
+        body = b"".join(chunks)
+        print(f"[api] response {status_code[0]}, {len(body)} bytes", file=sys.stderr, flush=True)
         return https_fn.Response(
-            response=b"".join(chunks),
+            response=body,
             status=status_code[0],
             headers=dict(headers[0]),
         )
     except Exception as e:
         import traceback
         traceback.print_exc()
+        print(f"[api] EXCEPTION: {e}", file=sys.stderr, flush=True)
         return https_fn.Response(response=f"Internal Server Error: {str(e)}", status=500)
 
 
