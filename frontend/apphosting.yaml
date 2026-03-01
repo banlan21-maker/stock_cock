@@ -8,7 +8,7 @@ runConfig:
 
 env:
   - variable: NEXT_PUBLIC_API_URL
-    value: https://api-7hhjfzwk2q-uc.a.run.app
+    value: https://api-7hhjfzwk2q-du.a.run.app
     availability:
       - BUILD
       - RUNTIME
