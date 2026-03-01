@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # 상수
 # ---------------------------------------------------------------------------
-_KIS_REAL_BASE = "https://openapi.kis.kr"
+_KIS_REAL_BASE = "https://openapi.koreainvestment.com:9443"
 _KIS_MOCK_BASE = "https://openapivts.koreainvestment.com:29443"
 
 # Rate Limit 제어: 초당 20건 → 15건으로 안전 마진, 요청 간 50ms 간격

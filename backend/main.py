@@ -65,7 +65,7 @@ async def _handle_http(scope: dict, body: bytes) -> dict:
     return resp
 
 
-@https_fn.on_request(timeout_sec=120, memory=1024, secrets=_SECRETS)
+@https_fn.on_request(timeout_sec=120, memory=1024, secrets=_SECRETS, region="asia-northeast3")
 def api(req: https_fn.Request) -> https_fn.Response:
     try:
         print(f"[api] {req.method} {req.path}", file=sys.stderr, flush=True)
