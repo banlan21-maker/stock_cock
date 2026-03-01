@@ -241,7 +241,7 @@ def _format_structured_input(data: dict) -> str:
 
     수급 = data.get("수급", {})
     lines.append("[수급 팩트]")
-    lines.append(f"- 최근 5일 외국인/기관: {수급.get('최근5일_외국인_기관', '정보 없음')}")
+    lines.append(f"- 최근 10일 외국인/기관: {수급.get('최근10일_외국인_기관', 수급.get('최근5일_외국인_기관', '정보 없음'))}")
     sp = 수급.get("수급_시가총액비율_퍼센트")
     if sp is not None:
         lines.append(f"- 시가총액 대비 순매수 비율: {sp}% (0.1% 이상이면 '싹 쓸어담는 중')")

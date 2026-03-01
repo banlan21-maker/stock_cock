@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     # DART 전자공시
     dart_api_key: str = ""
 
+    # 한국투자증권 (KIS) API
+    kis_app_key: str = ""
+    kis_app_secret: str = ""
+    kis_mock: bool = False   # True면 모의투자 환경 사용
+
     model_config = {
         "env_file": _ENV_FILE if _ENV_FILE.exists() else ".env",
         "env_file_encoding": "utf-8-sig",

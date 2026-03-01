@@ -10,11 +10,13 @@ NAVER_CLIENT_SECRET = params.SecretParam("NAVER_CLIENT_SECRET")
 NEWS_API_KEY        = params.SecretParam("NEWS_API_KEY")
 DART_API_KEY        = params.SecretParam("DART_API_KEY")
 FRONTEND_URL        = params.SecretParam("FRONTEND_URL")
+KIS_APP_KEY         = params.SecretParam("KIS_APP_KEY")
+KIS_APP_SECRET      = params.SecretParam("KIS_APP_SECRET")
 
 _SECRETS = [
     SUPABASE_URL, SUPABASE_SERVICE_KEY, GEMINI_API_KEY,
     NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, NEWS_API_KEY,
-    DART_API_KEY, FRONTEND_URL,
+    DART_API_KEY, FRONTEND_URL, KIS_APP_KEY, KIS_APP_SECRET,
 ]
 
 import asyncio
