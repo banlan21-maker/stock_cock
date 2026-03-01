@@ -263,12 +263,13 @@ def _fetch_weekly_top_stocks(limit: int | None = 50, sort_key: str = "change_rat
 
         end_info = _find_latest_trading_date(pykrx_stock)
         if not end_info:
-            return [], ""
+            logger.warning("주간: 최근 거래일 탐색 실패 → FDR 폴백")
+            return _fetch_top_stocks_fdr_fallback(limit or 50), ""
         end_date, end_display = end_info
 
         end_dt = datetime.strptime(end_date, "%Y%m%d")
         start_date, start_display = None, ""
-        for days_back in range(7, 16):
+        for days_back in range(7, 11):  # 최대 4번 시도 (기존 9번 → 속도 개선)
             candidate = (end_dt - timedelta(days=days_back)).strftime("%Y%m%d")
             df = _get_ohlcv_df(pykrx_stock, candidate, "KOSPI")
             if df is not None and not df.empty:
@@ -619,6 +620,37 @@ async def get_keyword_feed(keywords: str = Query(..., description="쉼표 구분
     }
 
 
+def _fetch_market_index() -> dict:
+    """yfinance로 KOSPI/KOSDAQ 최근 거래일 지수를 직접 조회한다.
+
+    장 마감·공휴일에도 마지막 거래일 값을 반환.
+    Returns: {"kospi": {"value": float, "change_rate": float}, "kosdaq": {...}}
+    """
+    result = {}
+    try:
+        import yfinance as yf
+        # Yahoo Finance 지수 심볼: ^KS11=KOSPI, ^KQ11=KOSDAQ
+        index_map = {"kospi": "^KS11", "kosdaq": "^KQ11"}
+        for name, symbol in index_map.items():
+            try:
+                hist = yf.Ticker(symbol).history(period="5d")
+                if hist.empty:
+                    continue
+                last = hist.iloc[-1]
+                prev = hist.iloc[-2] if len(hist) > 1 else hist.iloc[-1]
+                close_v = float(last.get("Close", 0))
+                prev_v  = float(prev.get("Close", close_v))
+                if close_v <= 0:
+                    continue
+                change_rate = round((close_v - prev_v) / prev_v * 100, 2) if prev_v > 0 else 0.0
+                result[name] = {"value": round(close_v, 2), "change_rate": change_rate}
+            except Exception as e:
+                logger.warning("yfinance 지수 조회 실패 [%s]: %s", symbol, e)
+    except Exception as e:
+        logger.warning("_fetch_market_index 전체 실패: %s", e)
+    return result
+
+
 @router.get("")
 async def get_dashboard():
     """대시보드 기본 데이터: 시장 지수 + 뉴스 + 정책 (키워드 없이). 5분 Supabase 캐시."""
@@ -627,28 +659,15 @@ async def get_dashboard():
     if cached:
         return cached
 
-    index_codes = [("KS11", "kospi"), ("KQ11", "kosdaq")]
-
     news_task = news_service.get_news_list(limit=3)
     policy_task = asyncio.to_thread(policy_service.get_policy_list, limit=2)
-    index_tasks = [
-        stock_service.get_stock_price_async(code, False)
-        for code, _ in index_codes
-    ]
+    index_task = asyncio.to_thread(_fetch_market_index)
 
-    results = await asyncio.gather(news_task, policy_task, *index_tasks)
+    results = await asyncio.gather(news_task, policy_task, index_task)
 
     news = results[0]
     policies = results[1]
-    index_prices = results[2:]
-
-    market_summary = {}
-    for (index_code, index_name), price in zip(index_codes, index_prices):
-        if price:
-            market_summary[index_name] = {
-                "value": price["current_price"],
-                "change_rate": price["change_rate"],
-            }
+    market_summary = results[2]  # {"kospi": {...}, "kosdaq": {...}}
 
     response = {
         "top_news": news["items"],

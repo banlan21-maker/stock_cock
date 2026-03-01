@@ -265,11 +265,15 @@ async def get_stock_price_async(code: str, fundamentals: bool = True) -> dict | 
 
 async def _try_kis_price(code: str, fundamentals: bool) -> dict | None:
     """KIS API로 현재가 + 재무 지표 조회. 네트워크 오류 시 None 반환."""
+    # 지수 코드는 KIS 미지원 → FDR 폴백에서 마지막 거래일 데이터 반환
+    if code in ("KS11", "KQ11"):
+        return None
     try:
         from app.services import kis_service  # 순환 import 방지
 
         kis_data = await kis_service.get_price(code)
-        if not kis_data:
+        # 0원 = 장 마감/공휴일이거나 미지원 종목 → FDR 폴백으로 마지막 거래일 데이터 사용
+        if not kis_data or kis_data.get("current_price", 0) == 0:
             return None
 
         # 종목명
@@ -284,11 +288,15 @@ async def _try_kis_price(code: str, fundamentals: bool) -> dict | None:
             if pn:
                 name = pn
 
-        # 수급
+        # 수급 + yfinance 보조 재무 병렬 조회 (부채비율/매출성장률/영업이익률/영업현금흐름)
         investor: dict = {}
+        yf_data: dict = {}
         supply_str = "정보 없음"
         if fundamentals:
-            investor = await kis_service.get_investor(code)
+            investor, yf_data = await asyncio.gather(
+                kis_service.get_investor(code),
+                asyncio.to_thread(_get_yfinance_fundamentals, code),
+            )
             supply_str = investor.get("display", "정보 없음")
 
         eps = kis_data.get("eps")
@@ -308,9 +316,11 @@ async def _try_kis_price(code: str, fundamentals: bool) -> dict | None:
             "per": kis_data.get("per"),
             "eps": eps, "bps": bps,
             "market_cap": kis_data.get("market_cap"),
-            "debt_ratio": None, "revenue_growth": None,
-            "operating_margin": None, "operating_cashflow": None,
-            "영문종목명": None,
+            "debt_ratio": yf_data.get("부채비율"),
+            "revenue_growth": yf_data.get("매출성장률"),
+            "operating_margin": yf_data.get("영업이익률"),
+            "operating_cashflow": yf_data.get("영업활동현금흐름"),
+            "영문종목명": yf_data.get("영문종목명"),
             "가성비 점수": pbr, "장사 수완": roe,
             "수급": supply_str, "_investor": investor,
             "_source": "kis",
@@ -559,66 +569,96 @@ async def get_chart_data_async(code: str, period: str = "3m", interval: str = "d
 
 
 def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> dict | None:
-    """종목의 차트 데이터를 가져온다 (fdr)."""
+    """종목의 차트 데이터를 가져온다 (fdr → yfinance 폴백)."""
     period_map = {"1m": 30, "3m": 90, "6m": 180, "1y": 365}
     days = period_map.get(period, 90)
 
+    df = None
+    open_col = high_col = low_col = close_col = vol_col = None
+
+    # 1차: FDR
     try:
         end = datetime.now()
         start = end - timedelta(days=days)
-        df = fdr.DataReader(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
-        if df.empty:
-            logger.warning("차트 데이터 비어있음: code=%s period=%s", code, period)
-            return None
+        df_fdr = fdr.DataReader(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        if not df_fdr.empty:
+            df = df_fdr
+            cols = df.columns.tolist()
+            open_col  = next((c for c in cols if c in ("Open",  "open",  "시가")), None)
+            high_col  = next((c for c in cols if c in ("High",  "high",  "고가")), None)
+            low_col   = next((c for c in cols if c in ("Low",   "low",   "저가")), None)
+            close_col = next((c for c in cols if c in ("Close", "close", "종가")), None)
+            vol_col   = next((c for c in cols if c in ("Volume", "volume", "거래량")), None)
+    except Exception as e:
+        logger.warning("FDR 차트 조회 실패 [%s]: %s → yfinance 폴백", code, e)
 
-        cols = df.columns.tolist()
-        open_col  = next((c for c in cols if c in ("Open",  "open",  "시가")), None)
-        high_col  = next((c for c in cols if c in ("High",  "high",  "고가")), None)
-        low_col   = next((c for c in cols if c in ("Low",   "low",   "저가")), None)
-        close_col = next((c for c in cols if c in ("Close", "close", "종가")), None)
-        vol_col   = next((c for c in cols if c in ("Volume", "volume", "거래량")), None)
+    # 2차: yfinance 폴백 (FDR 실패 또는 빈 결과)
+    if df is None or df.empty or close_col is None:
+        try:
+            import yfinance as yf
+            yf_period_map = {"1m": "1mo", "3m": "3mo", "6m": "6mo", "1y": "1y"}
+            suffix = ".KS"
+            for s in get_stock_list():
+                if s["code"] == code and s.get("market") == "KOSDAQ":
+                    suffix = ".KQ"
+                    break
+            st = yf.Ticker(f"{code}{suffix}")
+            df_yf = st.history(period=yf_period_map.get(period, "3mo"))
+            if not df_yf.empty:
+                df = df_yf
+                cols = df.columns.tolist()
+                open_col  = next((c for c in cols if c in ("Open",  "시가")), None)
+                high_col  = next((c for c in cols if c in ("High",  "고가")), None)
+                low_col   = next((c for c in cols if c in ("Low",   "저가")), None)
+                close_col = next((c for c in cols if c in ("Close", "종가")), None)
+                vol_col   = next((c for c in cols if c in ("Volume", "거래량")), None)
+                logger.info("yfinance 차트 폴백 사용 [%s]", code)
+        except Exception as e:
+            logger.warning("yfinance 차트 폴백 실패 [%s]: %s", code, e)
 
-        if close_col is None:
-            logger.error("차트 종가 컬럼 없음: code=%s, cols=%s", code, cols)
-            return None
-
-        if interval == "weekly":
-            agg_dict = {}
-            if open_col:  agg_dict[open_col]  = "first"
-            if high_col:  agg_dict[high_col]  = "max"
-            if low_col:   agg_dict[low_col]   = "min"
-            if close_col: agg_dict[close_col] = "last"
-            if vol_col:   agg_dict[vol_col]   = "sum"
-            df = df.resample("W").agg(agg_dict).dropna(subset=[close_col])
-
-        stocks = get_stock_list()
-        name = code
-        for s in stocks:
-            if s["code"] == code:
-                name = s["name"]
-                break
-        if name == code:
-            pykrx_name = _pykrx_name(code)
-            if pykrx_name:
-                name = pykrx_name
-
-        data = []
-        for date, row in df.iterrows():
-            close_v = _safe_col(row, "Close", "close", "종가")
-            if close_v is None:
-                continue
-            data.append({
-                "date":   date.strftime("%Y-%m-%d"),
-                "open":   float(_safe_col(row, "Open",   "open",   "시가")   or close_v),
-                "high":   float(_safe_col(row, "High",   "high",   "고가")   or close_v),
-                "low":    float(_safe_col(row, "Low",    "low",    "저가")   or close_v),
-                "close":  float(close_v),
-                "volume": int(_safe_col(row, "Volume", "volume", "거래량") or 0),
-            })
-
-        return {"code": code, "name": name, "period": period, "data": data}
-    except Exception:
+    if df is None or df.empty:
+        logger.warning("차트 데이터 비어있음: code=%s period=%s", code, period)
         return None
+
+    if close_col is None:
+        logger.error("차트 종가 컬럼 없음: code=%s, cols=%s", code, df.columns.tolist())
+        return None
+
+    if interval == "weekly":
+        agg_dict = {}
+        if open_col:  agg_dict[open_col]  = "first"
+        if high_col:  agg_dict[high_col]  = "max"
+        if low_col:   agg_dict[low_col]   = "min"
+        if close_col: agg_dict[close_col] = "last"
+        if vol_col:   agg_dict[vol_col]   = "sum"
+        df = df.resample("W").agg(agg_dict).dropna(subset=[close_col])
+
+    stocks = get_stock_list()
+    name = code
+    for s in stocks:
+        if s["code"] == code:
+            name = s["name"]
+            break
+    if name == code:
+        pykrx_name = _pykrx_name(code)
+        if pykrx_name:
+            name = pykrx_name
+
+    data = []
+    for date, row in df.iterrows():
+        close_v = _safe_col(row, "Close", "close", "종가")
+        if close_v is None:
+            continue
+        data.append({
+            "date":   date.strftime("%Y-%m-%d"),
+            "open":   float(_safe_col(row, "Open",   "open",   "시가")   or close_v),
+            "high":   float(_safe_col(row, "High",   "high",   "고가")   or close_v),
+            "low":    float(_safe_col(row, "Low",    "low",    "저가")   or close_v),
+            "close":  float(close_v),
+            "volume": int(_safe_col(row, "Volume", "volume", "거래량") or 0),
+        })
+
+    return {"code": code, "name": name, "period": period, "data": data}
 
 
 # ---------------------------------------------------------------------------
