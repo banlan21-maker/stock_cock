@@ -241,26 +241,38 @@ def get_stock_price(code: str, fundamentals: bool = True) -> dict | None:
 
 
 async def get_stock_price_async(code: str, fundamentals: bool = True) -> dict | None:
-    """종목의 현재 시세와 재무 지표를 반환한다 (KIS API, 비동기 + 캐시).
+    """종목의 현재 시세와 재무 지표를 반환한다 (비동기 + 캐시).
 
-    KIS /inquire-price 1회 호출로 현재가 + PBR/PER/EPS/BPS를 가져온다.
-    수급(기관/외국인)은 fundamentals=True일 때 추가 조회한다.
+    1차: KIS API (한국 네트워크에서만 접근 가능)
+    2차: FDR + pykrx 폴백 (GCP Cloud Functions 등 해외 서버용)
     """
-    from app.services import kis_service  # 순환 import 방지
-
     cache_key = f"stock_price:{code}:{fundamentals}"
     cached = get_generic_cache(cache_key)
     if cached:
         return cached
 
+    # ── 1차 시도: KIS API ────────────────────────────────────────────────────
+    result = await _try_kis_price(code, fundamentals)
+
+    # ── 2차 시도: FDR + pykrx 폴백 (KIS 네트워크 오류 시) ────────────────────
+    if result is None:
+        result = await _try_fdr_price(code, fundamentals)
+
+    if result:
+        set_generic_cache(cache_key, result, _CACHE_TTL_PRICE)
+    return result
+
+
+async def _try_kis_price(code: str, fundamentals: bool) -> dict | None:
+    """KIS API로 현재가 + 재무 지표 조회. 네트워크 오류 시 None 반환."""
     try:
-        # 1. KIS 현재가 + 재무 지표
+        from app.services import kis_service  # 순환 import 방지
+
         kis_data = await kis_service.get_price(code)
         if not kis_data:
-            logger.warning("KIS 현재가 조회 실패: code=%s", code)
             return None
 
-        # 2. 종목명 — 캐시 목록 우선, 없으면 pykrx 단일 조회
+        # 종목명
         stocks = get_stock_list()
         name = code
         for s in stocks:
@@ -268,59 +280,274 @@ async def get_stock_price_async(code: str, fundamentals: bool = True) -> dict | 
                 name = s["name"]
                 break
         if name == code:
-            pykrx_name = await asyncio.to_thread(_pykrx_name, code)
-            if pykrx_name:
-                name = pykrx_name
+            pn = await asyncio.to_thread(_pykrx_name, code)
+            if pn:
+                name = pn
 
-        # 3. 수급 (KIS, fundamentals=True일 때만)
+        # 수급
         investor: dict = {}
         supply_str = "정보 없음"
         if fundamentals:
             investor = await kis_service.get_investor(code)
             supply_str = investor.get("display", "정보 없음")
 
-        # 4. ROE 계산 (EPS / BPS × 100)
         eps = kis_data.get("eps")
         bps = kis_data.get("bps")
         roe = round(eps / bps * 100, 2) if eps and bps and bps > 0 else None
         pbr = kis_data.get("pbr")
 
-        result = {
-            "code": code,
-            "name": name,
+        return {
+            "code": code, "name": name,
             "current_price": kis_data["current_price"],
             "change": kis_data["change"],
             "change_rate": kis_data["change_rate"],
             "volume": kis_data["volume"],
             "high": kis_data["high"],
             "low": kis_data["low"],
-            # KIS 재무 지표
-            "pbr": pbr,
-            "roe": roe,
+            "pbr": pbr, "roe": roe,
             "per": kis_data.get("per"),
-            "eps": eps,
-            "bps": bps,
+            "eps": eps, "bps": bps,
             "market_cap": kis_data.get("market_cap"),
-            # Phase 3 이후 DART에서 채워질 필드
-            "debt_ratio": None,
-            "revenue_growth": None,
-            "operating_margin": None,
-            "operating_cashflow": None,
+            "debt_ratio": None, "revenue_growth": None,
+            "operating_margin": None, "operating_cashflow": None,
             "영문종목명": None,
-            # 레거시 키 (기존 router/frontend 호환)
-            "가성비 점수": pbr,
-            "장사 수완": roe,
-            "수급": supply_str,
-            # 수급 원본 — get_structured_analysis_data에서 재사용 (중복 API 호출 방지)
-            "_investor": investor,
+            "가성비 점수": pbr, "장사 수완": roe,
+            "수급": supply_str, "_investor": investor,
+            "_source": "kis",
         }
-
-        set_generic_cache(cache_key, result, _CACHE_TTL_PRICE)
-        return result
-
     except Exception as e:
-        logger.error("get_stock_price_async error: code=%s, %s", code, e, exc_info=True)
+        # DNS 오류(해외 서버) 또는 네트워크 오류 → 폴백으로 넘김
+        logger.warning("KIS API 사용 불가 [%s]: %s → FDR 폴백", code, e)
         return None
+
+
+async def _try_fdr_price(code: str, fundamentals: bool) -> dict | None:
+    """FDR + pykrx + yfinance로 현재가 + 재무 지표 조회 (폴백)."""
+    try:
+        # 1. 시세 (FDR)
+        def fetch_fdr():
+            end = datetime.now()
+            start = end - timedelta(days=7)
+            return fdr.DataReader(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+
+        df = await asyncio.to_thread(fetch_fdr)
+        if df.empty:
+            return None
+
+        latest = df.iloc[-1]
+        prev = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
+        close_curr = _safe_col(latest, "Close", "close", "종가")
+        close_prev = _safe_col(prev, "Close", "close", "종가")
+        if close_curr is None:
+            return None
+
+        close_curr = float(close_curr)
+        close_prev = float(close_prev) if close_prev is not None else close_curr
+        change = close_curr - close_prev
+        change_rate = round((change / close_prev) * 100, 2) if close_prev else 0
+
+        # 2. 종목명
+        stocks = get_stock_list()
+        name = code
+        for s in stocks:
+            if s["code"] == code:
+                name = s["name"]
+                break
+        if name == code:
+            pn = await asyncio.to_thread(_pykrx_name, code)
+            if pn:
+                name = pn
+
+        # 3. 재무 + 수급 (병렬, fundamentals=True일 때만)
+        pbr, roe = None, None
+        debt_ratio, rev_growth, op_margin, ocf = None, None, None, None
+        eng_name = None
+        supply_str = "정보 없음"
+        investor: dict = {}
+
+        if fundamentals:
+            today_str = datetime.now().strftime("%Y%m%d")
+            pk, yf, supply_res = await asyncio.gather(
+                asyncio.to_thread(_get_pykrx_fundamentals, code),
+                asyncio.to_thread(_get_yfinance_fundamentals, code),
+                asyncio.to_thread(_get_supply_pct_and_float, code, today_str),
+            )
+            supply_pct_val, market_cap_val, supply_str = supply_res
+            # _investor에 수급 데이터 저장 (get_structured_analysis_data에서 재사용)
+            investor = {
+                "display": supply_str,
+                "supply_pct": supply_pct_val,
+                "market_cap": market_cap_val,
+            }
+            pbr = pk.get("PBR") or yf.get("PBR")
+            roe = pk.get("ROE") or yf.get("ROE")
+            debt_ratio = yf.get("부채비율")
+            rev_growth = yf.get("매출성장률")
+            op_margin = yf.get("영업이익률")
+            ocf = yf.get("영업활동현금흐름")
+            eng_name = yf.get("영문종목명")
+
+        vol_ = _safe_col(latest, "Volume", "volume", "거래량")
+        high_ = _safe_col(latest, "High", "high", "고가")
+        low_ = _safe_col(latest, "Low", "low", "저가")
+
+        return {
+            "code": code, "name": name,
+            "current_price": close_curr,
+            "change": change, "change_rate": change_rate,
+            "volume": int(vol_) if vol_ is not None else 0,
+            "high": float(high_) if high_ is not None else close_curr,
+            "low": float(low_) if low_ is not None else close_curr,
+            "pbr": pbr, "roe": roe,
+            "per": None, "eps": None, "bps": None, "market_cap": None,
+            "debt_ratio": debt_ratio, "revenue_growth": rev_growth,
+            "operating_margin": op_margin, "operating_cashflow": ocf,
+            "영문종목명": eng_name,
+            "가성비 점수": pbr, "장사 수완": roe,
+            "수급": supply_str, "_investor": investor,
+            "_source": "fdr",
+        }
+    except Exception as e:
+        logger.error("FDR 폴백도 실패 [%s]: %s", code, e, exc_info=True)
+        return None
+
+
+# ── FDR 폴백용 내부 함수들 ────────────────────────────────────────────────────
+
+def _get_pykrx_fundamentals(code: str) -> dict:
+    """pykrx로 PBR, ROE 재무 지표. FDR 폴백 경로에서 사용."""
+    result = {"PBR": None, "ROE": None}
+    try:
+        from pykrx import stock
+        end = datetime.now()
+        for i in range(10):
+            target = (end - timedelta(days=i)).strftime("%Y%m%d")
+            df = stock.get_market_fundamental_by_date(target, target, code)
+            if df is None or df.empty:
+                continue
+            row = df.iloc[0]
+            idx_upper = {str(c).upper(): c for c in row.index}
+            pbr_col = idx_upper.get("PBR")
+            if pbr_col is not None:
+                try:
+                    f = float(row[pbr_col])
+                    if f > 0:
+                        result["PBR"] = round(f, 2)
+                except (ValueError, TypeError):
+                    pass
+            eps_col = idx_upper.get("EPS")
+            bps_col = idx_upper.get("BPS")
+            if eps_col and bps_col:
+                try:
+                    b = float(row[bps_col])
+                    if b > 0:
+                        result["ROE"] = round(float(row[eps_col]) / b * 100, 2)
+                except (ValueError, TypeError):
+                    pass
+            if result["PBR"] is not None or result["ROE"] is not None:
+                break
+    except Exception as e:
+        logger.warning("_get_pykrx_fundamentals [%s]: %s", code, e)
+    return result
+
+
+def _get_yfinance_fundamentals(code: str) -> dict:
+    """yfinance로 보조 재무 (부채비율, 매출성장률 등). FDR 폴백 경로에서 사용."""
+    result = {
+        "PBR": None, "ROE": None,
+        "매출성장률": None, "부채비율": None, "영업이익률": None,
+        "영업활동현금흐름": None, "영문종목명": None,
+    }
+    try:
+        import yfinance as yf
+        # KOSDAQ 여부 판단
+        stocks = get_stock_list()
+        ticker_suffix = ".KS"
+        for s in stocks:
+            if s["code"] == code and s.get("market") == "KOSDAQ":
+                ticker_suffix = ".KQ"
+                break
+        st = yf.Ticker(f"{code}{ticker_suffix}")
+        info = st.info or {}
+        if info.get("priceToBook"):
+            result["PBR"] = round(float(info["priceToBook"]), 2)
+        if info.get("returnOnEquity"):
+            result["ROE"] = round(float(info["returnOnEquity"]) * 100, 2)
+        if info.get("revenueGrowth"):
+            result["매출성장률"] = round(float(info["revenueGrowth"]) * 100, 2)
+        if info.get("debtToEquity"):
+            result["부채비율"] = round(float(info["debtToEquity"]), 1)
+        if info.get("operatingMargins"):
+            result["영업이익률"] = round(float(info["operatingMargins"]) * 100, 2)
+        if info.get("operatingCashflow"):
+            result["영업활동현금흐름"] = int(info["operatingCashflow"])
+        result["영문종목명"] = info.get("longName") or info.get("shortName")
+    except Exception as e:
+        logger.warning("_get_yfinance_fundamentals [%s]: %s", code, e)
+    return result
+
+
+def _first_col(df, *names: str):
+    """DataFrame 컬럼에서 names 중 존재하는 첫 컬럼명 반환."""
+    if df is None or df.empty:
+        return None
+    cols = [str(c) for c in df.columns]
+    for n in names:
+        for c in cols:
+            if n in c or n == c:
+                return c
+    return None
+
+
+def _get_supply_pct_and_float(code: str, today_str: str) -> tuple[float | None, int | None, str]:
+    """pykrx로 기관/외국인 수급 (FDR 폴백 경로에서 사용)."""
+    try:
+        from pykrx import stock
+        end_dt = datetime.strptime(today_str, "%Y%m%d")
+        end_date = None
+        for d in range(0, 8):
+            cand = (end_dt - timedelta(days=d)).strftime("%Y%m%d")
+            cap = stock.get_market_cap(cand, cand, code)
+            if cap is not None and not cap.empty:
+                end_date = cand
+                break
+        if not end_date:
+            return None, None, "정보 없음"
+
+        start = (end_dt - timedelta(days=10)).strftime("%Y%m%d")
+        val_df = stock.get_market_trading_value_by_date(start, end_date, code)
+        cap_df = stock.get_market_cap(start, end_date, code)
+        if val_df is None or val_df.empty or cap_df is None or cap_df.empty:
+            return None, None, "정보 없음"
+
+        inst_col = _first_col(val_df, "기관합계", "기관")
+        fore_col = _first_col(val_df, "외국인합계", "외국인")
+        if not inst_col or not fore_col:
+            return None, None, "정보 없음"
+
+        inst_net = float(val_df[inst_col].sum())
+        fore_net = float(val_df[fore_col].sum())
+        net_buy = inst_net + fore_net
+
+        last = cap_df.iloc[-1]
+        mktcap_col = _first_col(cap_df, "시가총액")
+        market_cap = 0.0
+        if mktcap_col:
+            try:
+                v = last.get(mktcap_col, 0)
+                if v is not None and str(v) not in ("nan", "NaN", ""):
+                    market_cap = float(v)
+            except (ValueError, TypeError):
+                pass
+        if market_cap <= 0:
+            return None, None, "정보 없음"
+
+        pct = round((net_buy / market_cap) * 100, 3)
+        raw = f"기관 {int(inst_net/1e8):+,}억, 외국인 {int(fore_net/1e8):+,}억 (최근 10일)"
+        return pct, int(market_cap), raw
+    except Exception as e:
+        logger.warning("_get_supply_pct_and_float [%s]: %s", code, e)
+        return None, None, "정보 없음"
 
 
 # ---------------------------------------------------------------------------
@@ -448,18 +675,21 @@ async def get_structured_analysis_data(code: str) -> dict | None:
         else:
             chart_summary = f"최근 {len(data)}일 데이터. 종가: {data[-1]['close']:,.0f}원"
 
-    # 4. 수급 — get_stock_price_async가 이미 조회한 investor 데이터 재사용
+    # 4. 수급 — get_stock_price_async가 이미 조회한 _investor 재사용 (중복 호출 없음)
     investor = price.get("_investor") or {}
-    inst_net  = investor.get("inst_net_buy")
-    fore_net  = investor.get("fore_net_buy")
-    supply_raw = investor.get("display", "정보 없음")
+    # KIS: inst_net_buy/fore_net_buy로 직접 계산
+    # FDR: supply_pct와 market_cap이 _investor에 미리 계산되어 있음
+    supply_raw = investor.get("display") or price.get("수급") or "정보 없음"
+    market_cap = price.get("market_cap") or investor.get("market_cap")
+    supply_pct = investor.get("supply_pct")  # FDR 경로에서 이미 계산됨
 
-    # 시가총액 대비 순매수 비율
-    market_cap = price.get("market_cap")
-    supply_pct = None
-    if market_cap and market_cap > 0 and inst_net is not None and fore_net is not None:
-        net_buy = inst_net + fore_net
-        supply_pct = round((net_buy / market_cap) * 100, 3)
+    # KIS 경로: inst_net_buy + fore_net_buy로 supply_pct 계산
+    if supply_pct is None:
+        inst_net = investor.get("inst_net_buy")
+        fore_net = investor.get("fore_net_buy")
+        if market_cap and market_cap > 0 and inst_net is not None and fore_net is not None:
+            net_buy = inst_net + fore_net
+            supply_pct = round((net_buy / market_cap) * 100, 3)
 
     pbr = price.get("pbr")
     roe = price.get("roe")
