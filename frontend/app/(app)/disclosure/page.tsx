@@ -191,7 +191,7 @@ export default function DisclosurePage() {
           공시 콕
         </h1>
         <p className="text-gray-400 mt-1 text-sm">
-          오늘 발표된 주요 공시를 꼰대아저씨가 쉽게 풀어드립니다
+          공시 내용을 AI가 쉽게 설명하고 분석해줍니다.
         </p>
       </div>
 

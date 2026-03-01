@@ -35,10 +35,10 @@ export default function PolicyPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Search className="w-6 h-6 text-purple-400" />
-          정책 돋보기
+          <Search className="w-6 h-6 text-amber-400" />
+          정책 콕
         </h1>
-        <p className="text-gray-400 mt-1">주력 테마 관련 정부 정책을 AI가 분석합니다</p>
+        <p className="text-gray-400 mt-1 text-sm">방대한 정책 보도자료, AI가 3줄 핵심 요약부터 연관 수혜주까지 한 번에 정리!</p>
       </div>
 
       {/* 활성 키워드 배지 */}

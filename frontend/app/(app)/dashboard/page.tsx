@@ -9,6 +9,7 @@ import KeywordFeed from "@/components/dashboard/KeywordFeed";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
+import { Rocket } from "lucide-react";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -34,7 +35,13 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">대시보드</h1>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Rocket className="w-6 h-6 text-amber-400" />
+          시작하기
+        </h1>
+        <p className="text-gray-400 mt-1 text-sm">오늘 시장의 모든 이슈, 헤매지 말고 여기서 &apos;콕&apos; 하세요.</p>
+      </div>
 
       {/* 테마 트렌드 (최상단) */}
       <ThemeTrend />

@@ -5,6 +5,7 @@ import { searchStocks } from "@/lib/api";
 import StockSearchBar from "@/components/stock/StockSearchBar";
 import StockSearchResultCard from "@/components/stock/StockSearchResultCard";
 import StockCompare from "@/components/stock/StockCompare";
+import { Lightbulb } from "lucide-react";
 
 type Tab = "search" | "compare";
 
@@ -32,7 +33,13 @@ export default function StockSearchPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">종목분석</h1>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Lightbulb className="w-6 h-6 text-amber-400" />
+          종목 콕
+        </h1>
+        <p className="text-gray-400 mt-1 text-sm">AI가 종목을 분석하고 쉽게 설명해줍니다 AI와 함께 투자의 확신을 더하세요.</p>
+      </div>
 
       {/* 탭 헤더 */}
       <div className="flex gap-1 bg-white/5 p-1 rounded-xl">

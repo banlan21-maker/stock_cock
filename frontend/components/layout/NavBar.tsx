@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Scale, BarChart3, LayoutDashboard, PieChart, FileText } from "lucide-react";
+import { Globe, Search, Rocket, PieChart, FileText, Lightbulb } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "시작하기", icon: LayoutDashboard },
-  { href: "/issues", label: "이슈", icon: Globe },
-  { href: "/policy", label: "정책", icon: Scale },
-  { href: "/stock", label: "종목분석", icon: BarChart3 },
+  { href: "/dashboard", label: "시작", icon: Rocket },
+  { href: "/issues", label: "이슈콕", icon: Globe },
+  { href: "/policy", label: "정책콕", icon: Search },
   { href: "/disclosure", label: "공시콕", icon: FileText },
+  { href: "/stock", label: "종목콕", icon: Lightbulb },
   { href: "/portfolio", label: "포트폴리오", icon: PieChart },
 ];
 

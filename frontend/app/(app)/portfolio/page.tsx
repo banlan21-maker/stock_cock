@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Plus, Brain, Star, Briefcase, Search, BookOpen } from "lucide-react";
+import { Plus, Brain, Star, Briefcase, Search, BookOpen, PieChart } from "lucide-react";
 import Link from "next/link";
 import { fetchPortfolioWithPrice, addHolding, updateHolding, deleteHolding } from "@/lib/portfolio";
 import { getWatchlist, removeWatchlist } from "@/lib/watchlist";
@@ -331,7 +331,13 @@ function PortfolioPageInner() {
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <h1 className="text-2xl font-bold">내 포트폴리오</h1>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <PieChart className="w-6 h-6 text-amber-400" />
+          내 포트폴리오
+        </h1>
+        <p className="text-gray-400 mt-1 text-sm">AI 매매일지 피드백과 종목 진단으로 더 단단한 투자 포트폴리오를 완성하세요.</p>
+      </div>
 
       {/* 탭 */}
       <div className="flex gap-1 bg-white/5 rounded-xl p-1 w-fit">

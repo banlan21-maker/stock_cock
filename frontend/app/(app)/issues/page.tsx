@@ -7,7 +7,7 @@ import type { NewsListResponse } from "@/types";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import NewsCard from "@/components/news/NewsCard";
-import { X } from "lucide-react";
+import { X, Globe } from "lucide-react";
 
 const categories = [
   { value: "all", label: "전체" },
@@ -49,7 +49,13 @@ export default function IssuesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">국내외 이슈</h1>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Globe className="w-6 h-6 text-amber-400" />
+          이슈 콕
+        </h1>
+        <p className="text-gray-400 mt-1 text-sm">AI가 분석한 국내외 핵심 이슈, 단순 요약을 넘어 시장 파급력까지!</p>
+      </div>
 
       {/* 활성 키워드 배지 */}
       {activeKeywords && !showAll ? (
