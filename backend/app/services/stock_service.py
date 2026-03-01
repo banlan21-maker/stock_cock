@@ -107,6 +107,21 @@ def _get_pykrx_stock_list() -> list[dict]:
         return []
 
 
+def _fix_corp_name_encoding(name: str) -> str:
+    """CP949 bytes가 latin-1 str로 잘못 저장된 경우 올바른 한글 Unicode로 변환한다.
+
+    구버전 opendartreader pkl에서 corp_name이 latin-1(code points < 256)로
+    잘못 저장되는 경우가 있다. 이 경우 latin-1 인코딩 → CP949 디코딩으로 복원한다.
+    """
+    try:
+        # 모든 문자가 latin-1 범위(< 256)이면 CP949 bytes로 잘못 저장된 것으로 판단
+        if all(ord(c) < 256 for c in name):
+            return name.encode("latin-1").decode("cp949")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        pass
+    return name
+
+
 def _get_dart_corp_codes_stock_list() -> list[dict]:
     """DART 공시 기업코드 캐시(pkl)로 상장 종목 목록을 가져온다 (최후 폴백)."""
     try:
@@ -131,7 +146,7 @@ def _get_dart_corp_codes_stock_list() -> list[dict]:
         result = []
         for _, row in listed.iterrows():
             code = str(row["stock_code"]).strip().zfill(6)
-            name = str(row["corp_name"]).strip()
+            name = _fix_corp_name_encoding(str(row["corp_name"]).strip())
             result.append({"code": code, "name": name, "market": "KRX"})
 
         logger.info(
