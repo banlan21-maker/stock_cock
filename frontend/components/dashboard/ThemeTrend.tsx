@@ -30,12 +30,22 @@ interface TreemapContentProps {
   depth?: number;
   value?: number;
   avgChangeRate?: number;
+  totalVolume?: number;
+  sortMode?: SortMode;
   fillColor?: string;
 }
 
 function truncateText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen - 1) + "…";
+}
+
+function formatVolume(volume: number): string {
+  if (volume >= 1_000_000_000_000) return `${(volume / 1_000_000_000_000).toFixed(1)}조`;
+  if (volume >= 100_000_000_000) return `${Math.round(volume / 100_000_000_000) * 1000}억`.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1,");
+  if (volume >= 100_000_000) return `${Math.round(volume / 100_000_000)}억`;
+  if (volume >= 10_000_000) return `${Math.round(volume / 10_000_000)}천만`;
+  return `${Math.round(volume / 1_000_000)}백만`;
 }
 
 function ThemeTreemapContent(props: TreemapContentProps) {
@@ -47,6 +57,8 @@ function ThemeTreemapContent(props: TreemapContentProps) {
     name = "",
     depth = 0,
     avgChangeRate = 0,
+    totalVolume = 0,
+    sortMode = "change_rate",
     fillColor = "#ef4444",
   } = props;
   if (depth === 0 || width < 15 || height < 12) return null;
@@ -56,7 +68,9 @@ function ThemeTreemapContent(props: TreemapContentProps) {
   const maxNameLen = Math.max(2, Math.floor(width / (fontSize * 0.85)));
   const displayName = truncateText(name, maxNameLen);
   const showRate = height > 40;
-  const rateStr = `${avgChangeRate > 0 ? "+" : ""}${Number(avgChangeRate).toFixed(2)}%`;
+  const subStr = sortMode === "volume"
+    ? formatVolume(totalVolume)
+    : `${avgChangeRate > 0 ? "+" : ""}${Number(avgChangeRate).toFixed(2)}%`;
 
   return (
     <g>
@@ -92,7 +106,7 @@ function ThemeTreemapContent(props: TreemapContentProps) {
               fontSize={Math.max(9, fontSize - 1)}
               style={{ pointerEvents: "none" }}
             >
-              {rateStr}
+              {subStr}
             </text>
           )}
         </>
@@ -135,6 +149,8 @@ export default function ThemeTrend() {
     name: g.theme,
     value: Math.max(g.total_volume, 1),
     avgChangeRate: Number(g.avg_change_rate),
+    totalVolume: g.total_volume,
+    sortMode: sort,
     fillColor: getColor(Number(g.avg_change_rate)),
   }));
 
