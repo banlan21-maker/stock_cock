@@ -8,8 +8,9 @@ import {
   updateJournalEntry,
   deleteJournalEntry,
 } from "@/lib/portfolio";
+import { searchStocks } from "@/lib/api";
 import { useAd } from "@/context/AdProvider";
-import type { JournalEntry, JournalCreateRequest } from "@/types";
+import type { JournalEntry, JournalCreateRequest, StockSearchResult } from "@/types";
 
 // ── 저널 모달 ────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,54 @@ function JournalModal({ initial, onClose, onSubmit, saving }: JournalModalProps)
     quantity: initial?.quantity ?? 0,
     memo: initial?.memo ?? "",
   });
+
+  // 종목 검색 자동완성
+  const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleNameChange(value: string) {
+    setForm((prev) => ({ ...prev, stock_name: value, stock_code: "" }));
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (value.trim().length < 1) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const data = await searchStocks(value.trim());
+        setSearchResults(data.results.slice(0, 8));
+        setShowDropdown(data.results.length > 0);
+      } catch {
+        setSearchResults([]);
+        setShowDropdown(false);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }
+
+  function handleSelectStock(stock: StockSearchResult) {
+    setForm((prev) => ({ ...prev, stock_name: stock.name, stock_code: stock.code }));
+    setShowDropdown(false);
+    setSearchResults([]);
+  }
 
   function handleChange(field: keyof JournalCreateRequest, value: string | number) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -84,29 +133,58 @@ function JournalModal({ initial, onClose, onSubmit, saving }: JournalModalProps)
             </button>
           </div>
 
-          {/* 종목명 */}
-          <div>
+          {/* 종목명 + 검색 자동완성 */}
+          <div className="relative" ref={dropdownRef}>
             <label className="block text-xs text-gray-400 mb-1">종목명 *</label>
-            <input
-              required
-              type="text"
-              value={form.stock_name}
-              onChange={(e) => handleChange("stock_name", e.target.value)}
-              placeholder="예: 삼성전자"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-skyblue/50 placeholder-gray-600"
-            />
+            <div className="relative">
+              <input
+                required
+                type="text"
+                value={form.stock_name}
+                onChange={(e) => handleNameChange(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                placeholder="종목명 검색 (예: 삼성전자)"
+                autoComplete="off"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:border-skyblue/50 placeholder-gray-600"
+              />
+              {searchLoading && (
+                <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+              )}
+            </div>
+
+            {/* 검색 드롭다운 */}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[#1a1f2e] border border-white/20 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                {searchResults.map((stock) => (
+                  <button
+                    key={stock.code}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelectStock(stock); }}
+                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/10 transition-colors text-left"
+                  >
+                    <span className="text-sm font-medium">{stock.name}</span>
+                    <span className="text-xs text-gray-400 ml-2 shrink-0">{stock.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 종목코드 (선택) */}
+          {/* 종목코드 (검색 시 자동입력) */}
           <div>
-            <label className="block text-xs text-gray-400 mb-1">종목코드 (선택)</label>
+            <label className="block text-xs text-gray-400 mb-1">
+              종목코드
+              {form.stock_code && <span className="ml-1 text-green-400">✓ 자동입력됨</span>}
+            </label>
             <input
               type="text"
               value={form.stock_code ?? ""}
               onChange={(e) => handleChange("stock_code", e.target.value)}
-              placeholder="예: 005930"
+              placeholder="종목명 검색 시 자동 입력 (예: 005930)"
               maxLength={6}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-skyblue/50 placeholder-gray-600"
+              className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm focus:outline-none placeholder-gray-600 ${
+                form.stock_code ? "border-green-500/30 focus:border-green-500/50" : "border-white/10 focus:border-skyblue/50"
+              }`}
             />
           </div>
 

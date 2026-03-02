@@ -68,14 +68,17 @@ export default function AIAnalysisReport() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    let gotResult = false;
     try {
       for await (const event of fetchPortfolioAnalysisStream(ctrl.signal)) {
         if (event.type === "status") {
           setStatus({ step: event.step, message: event.message });
         } else if (event.type === "done") {
+          gotResult = true;
           setResult(event.data);
           setLoading(false);
         } else if (event.type === "error") {
+          gotResult = true;
           setError(event.message);
           setLoading(false);
         }
@@ -84,6 +87,13 @@ export default function AIAnalysisReport() {
       if ((err as Error).name !== "AbortError") {
         setError("분석 중 오류가 발생했습니다.");
       }
+      setLoading(false);
+      return;
+    }
+
+    // SSE 루프가 done/error 없이 종료된 경우 (Cloud Functions 버퍼링 오류 등)
+    if (!gotResult) {
+      setError("분석 결과를 받지 못했습니다. 다시 시도해 주세요.");
       setLoading(false);
     }
   }
