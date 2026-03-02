@@ -104,15 +104,19 @@ function AnalysisTab({ code }: { code: string }) {
 
     abortRef.current = new AbortController();
 
+    // SSE 스트림 시도 (Cloud Functions 환경에서는 전체 버퍼링 후 일괄 수신될 수 있음)
+    let gotResult = false;
     try {
       for await (const event of fetchStockAnalysisStream(code, abortRef.current.signal)) {
         if (event.type === "status") {
           setCurrentStep(event.step);
         } else if (event.type === "done") {
+          gotResult = true;
           setAnalysis(event.data);
           setLoading(false);
           return;
         } else if (event.type === "error") {
+          gotResult = true;
           const msg = event.message ?? "분석 중 오류가 발생했습니다.";
           setError(
             msg.includes("429") || msg.includes("요청이 많") || event.code === "RATE_LIMITED"
@@ -123,9 +127,17 @@ function AnalysisTab({ code }: { code: string }) {
           return;
         }
       }
-      setLoading(false);
     } catch (e: unknown) {
-      if ((e as Error)?.name === "AbortError") return;
+      // 사용자 취소(AbortError) → 로딩 해제 후 조용히 종료
+      if ((e as Error)?.name === "AbortError") {
+        setLoading(false);
+        return;
+      }
+      // 그 외 예외 → REST 폴백으로 계속
+    }
+
+    // SSE가 done/error 없이 종료되거나 예외 발생 → REST 폴백
+    if (!gotResult) {
       try {
         const data = await fetchStockAnalysis(code);
         setAnalysis(data);
@@ -188,7 +200,23 @@ function AnalysisTab({ code }: { code: string }) {
       </div>
     );
 
-  if (!analysis) return null;
+  if (!analysis) {
+    // 분석이 취소되었거나 예외로 중단된 경우 → 재시도 UI
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center space-y-4">
+        <Sparkles className="w-8 h-8 mx-auto text-skyblue opacity-50" />
+        <div className="space-y-1">
+          <p className="text-gray-400 text-sm">분석이 완료되지 않았습니다.</p>
+        </div>
+        <button
+          onClick={runStream}
+          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/10 active:scale-[0.98]"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
