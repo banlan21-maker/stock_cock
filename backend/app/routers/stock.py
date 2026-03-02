@@ -79,6 +79,13 @@ async def compare_stocks(
 async def get_price(code: str):
     result = await stock_service.get_stock_price_async(code)
     if not result:
+        # 종목 목록에는 있지만 가격 없음 → 상장폐지/거래정지 가능성
+        stocks = stock_service.get_stock_list()
+        if any(s["code"] == code for s in stocks):
+            raise HTTPException(
+                status_code=404,
+                detail="현재 조회할 수 없는 종목입니다. 상장폐지 또는 거래정지 종목일 수 있습니다.",
+            )
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다.")
     return result
 

@@ -435,7 +435,33 @@ export default function StockDetailPage() {
   };
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} />;
+  if (error) {
+    const isDelisted = error.includes("상장폐지") || error.includes("거래정지");
+    return (
+      <div className="space-y-4 max-w-2xl mx-auto">
+        <Link
+          href="/stock"
+          className="inline-flex items-center text-gray-400 hover:text-white text-sm transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4 mr-1" /> 검색으로
+        </Link>
+        <div className={`border rounded-xl p-6 text-center space-y-2 ${
+          isDelisted
+            ? "bg-yellow-500/10 border-yellow-500/30"
+            : "bg-red-500/10 border-red-500/30"
+        }`}>
+          <p className={`text-sm font-medium ${isDelisted ? "text-yellow-300" : "text-red-300"}`}>
+            {error}
+          </p>
+          {isDelisted && (
+            <p className="text-xs text-gray-400">
+              KRX에서 상장폐지되었거나 거래가 정지된 종목은 조회되지 않습니다.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (!price) return null;
 
   return (
