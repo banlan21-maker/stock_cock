@@ -8,7 +8,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import AiSummary from "@/components/news/AiSummary";
 import Link from "next/link";
-import { ArrowLeft, Sparkles, Star, Search } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // StockAnalysisPanel removed as research is now done via navigation
@@ -17,39 +17,13 @@ import { useRouter } from "next/navigation";
 function RelatedStockList({
   stocks,
   onSelect,
-  impactStrength,
 }: {
   stocks: StockMention[];
   onSelect: (code: string) => void;
-  impactStrength?: string;
 }) {
-  const impactLabel: Record<string, string> = {
-    "매우 높음": "시장 파급력이 매우 높은 뉴스입니다. 아래 종목들을 주목하세요.",
-    "높음": "시장 파급력이 높은 뉴스입니다. 관련 종목 흐름을 체크하세요.",
-    "보통": "보통 수준의 시장 영향이 예상됩니다.",
-    "낮음": "시장 영향은 제한적이나 관련 종목을 참고하세요.",
-  };
 
   return (
     <div className="space-y-3">
-      {/* AI의 한마디 */}
-      <div className="bg-skyblue/10 border border-skyblue/30 rounded-xl px-4 py-3 flex items-start gap-3">
-        <Sparkles className="w-4 h-4 text-skyblue mt-0.5 shrink-0" />
-        <div>
-          <p className="text-xs text-skyblue font-semibold mb-0.5">AI의 한마디</p>
-          <p className="text-sm text-gray-200">
-            {impactStrength
-              ? impactLabel[impactStrength] ?? `파급력 ${impactStrength} — 관련 종목을 참고하세요.`
-              : "AI가 이 뉴스에서 관련 종목을 분석했습니다. 종목을 클릭하면 종목분석 상세로 이동합니다."}
-          </p>
-          {impactStrength && (
-            <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-skyblue/20 text-skyblue font-bold">
-              파급력 {impactStrength}
-            </span>
-          )}
-        </div>
-      </div>
-
       {/* 종목 목록 */}
       {stocks.map((s, i) => {
         return (
@@ -168,7 +142,6 @@ export default function NewsDetailPage() {
               <RelatedStockList
                 stocks={relatedStocks}
                 onSelect={handleSelectStock}
-                impactStrength={data.impact_strength}
               />
             </div>
           )}

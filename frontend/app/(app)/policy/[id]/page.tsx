@@ -8,7 +8,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import PolicyAnalysis from "@/components/policy/PolicyAnalysis";
 import Link from "next/link";
-import { ArrowLeft, Sparkles, Star, Search } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // StockAnalysisPanel removed as research is now done via navigation
@@ -17,11 +17,9 @@ import { useRouter } from "next/navigation";
 function RelatedStockList({
   stocks,
   onSelect,
-  aiComment,
 }: {
   stocks: StockRecommendation[];
   onSelect: (code: string) => void;
-  aiComment?: string;
 }) {
   const tagStyle = (impact: string) => {
     if (impact === "positive") return { cls: "bg-amber-500/20 text-amber-400 border border-amber-500/30", label: "직접수혜주" };
@@ -31,17 +29,6 @@ function RelatedStockList({
 
   return (
     <div className="space-y-3">
-      {/* AI의 한마디 */}
-      <div className="bg-skyblue/10 border border-skyblue/30 rounded-xl px-4 py-3 flex items-start gap-3">
-        <Sparkles className="w-4 h-4 text-skyblue mt-0.5 shrink-0" />
-        <div>
-          <p className="text-xs text-skyblue font-semibold mb-0.5">AI의 한마디</p>
-          <p className="text-sm text-gray-200">
-            {aiComment ?? "이 정책의 수혜·피해 종목을 AI가 분석했습니다. 종목을 클릭하면 종목분석 상세로 이동합니다."}
-          </p>
-        </div>
-      </div>
-
       {/* 종목 목록 */}
       {stocks.map((s, i) => {
         const tag = tagStyle(s.impact);
@@ -149,7 +136,6 @@ export default function PolicyDetailPage() {
               <RelatedStockList
                 stocks={relatedStocks}
                 onSelect={handleSelectStock}
-                aiComment={data.ai_analysis ? data.ai_analysis.split("\n")[0].replace(/^[#\s*]+/, "").trim() : undefined}
               />
             </div>
           )}
