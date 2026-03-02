@@ -434,8 +434,21 @@ async def _try_fdr_price(code: str, fundamentals: bool) -> dict | None:
             return fdr.DataReader(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
 
         df = await asyncio.to_thread(fetch_fdr)
+
+        # FDR 빈 결과 → yfinance 가격 폴백
         if df.empty:
-            return None
+            try:
+                _, ticker_str = _get_yfinance_ticker(code)
+                import yfinance as yf
+                yf_hist = await asyncio.to_thread(lambda: yf.Ticker(ticker_str).history(period="5d"))
+                if yf_hist.empty:
+                    logger.warning("FDR + yfinance 가격 폴백 모두 빈 결과 [%s]", code)
+                    return None
+                df = yf_hist
+                logger.info("yfinance 가격 폴백 사용 [%s] (%s)", code, ticker_str)
+            except Exception as e:
+                logger.warning("yfinance 가격 폴백 실패 [%s]: %s → None 반환", code, e)
+                return None
 
         latest = df.iloc[-1]
         prev = df.iloc[-2] if len(df) > 1 else df.iloc[-1]

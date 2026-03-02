@@ -145,8 +145,8 @@ function AnalysisTab({ code }: { code: string }) {
 
   const handleStartAnalysis = () => {
     requestReward(() => {
+      // runStream()은 useEffect가 hasStarted 변화를 감지해 호출 — 직접 호출 시 abort 레이스 컨디션 발생
       setHasStarted(true);
-      runStream();
     });
   };
 
