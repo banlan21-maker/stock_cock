@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
-const AD_HEIGHT_PX = 50;
+const AD_HEIGHT_PX = 60;
 /** 배너 최소 너비 - availableWidth=0 방지 */
 const AD_MIN_WIDTH_PX = 50;
 
@@ -25,7 +25,9 @@ export const AD_BANNER_HEIGHT = AD_HEIGHT_PX;
 export default function AdBanner() {
   const pushed = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const insRef = useRef<HTMLModElement>(null);
   const [scriptReady, setScriptReady] = useState(false);
+  const [adFilled, setAdFilled] = useState(false);
   const { client, slot, isTest } = getAdConfig();
 
   useEffect(() => {
@@ -59,6 +61,19 @@ export default function AdBanner() {
     };
   }, [scriptReady]);
 
+  // data-ad-status="filled" 감지 → placeholder 숨김
+  useEffect(() => {
+    const ins = insRef.current;
+    if (!ins) return;
+    const observer = new MutationObserver(() => {
+      if (ins.dataset.adStatus === "filled") {
+        setAdFilled(true);
+      }
+    });
+    observer.observe(ins, { attributes: true, attributeFilter: ["data-ad-status"] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <Script
@@ -74,11 +89,13 @@ export default function AdBanner() {
         aria-label="광고"
       >
         <ins
-          className="adsbygoogle block relative z-10 ad-banner-ins"
+          ref={insRef}
+          className="adsbygoogle relative z-10 ad-banner-ins"
           style={{
-            display: "inline-block",
+            display: "block",
             width: "100%",
             minWidth: `${AD_MIN_WIDTH_PX}px`,
+            height: `${AD_HEIGHT_PX}px`,
           }}
           data-ad-client={client}
           data-ad-slot={slot}
@@ -86,13 +103,13 @@ export default function AdBanner() {
           data-full-width-responsive="false"
           {...(isTest ? { "data-ad-test": "on" } : {})}
         />
-        {/* 개발/테스트 시 광고 로드 전 보이는 플레이스홀더 */}
-        {isTest && (
+        {/* 광고 미로드 시 보이는 플레이스홀더 */}
+        {isTest && !adFilled && (
           <div
             className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs pointer-events-none z-0"
             aria-hidden
           >
-            테스트 광고
+            테스트 광고 로딩 중...
           </div>
         )}
       </div>

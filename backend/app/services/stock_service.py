@@ -1,3 +1,4 @@
+import time
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -22,6 +23,8 @@ except ImportError as e:
 
 # 주요 종목 목록 (검색용 인메모리 캐시)
 STOCK_LIST_CACHE: list[dict] | None = None
+_STOCK_LIST_CACHE_TS: float = 0.0          # 마지막 성공적 로드 시각
+_STOCK_LIST_CACHE_TTL: float = 3600.0     # 1시간마다 자동 갱신
 
 # 캐시 TTL (초)
 _CACHE_TTL_PRICE = 180  # 3분
@@ -67,7 +70,21 @@ def _parse_fdr_listing_df(df) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# 종목 목록 — fdr → pykrx → DART pkl 순 폴백
+# 종목명 정규화 (검색 매칭 향상)
+# ---------------------------------------------------------------------------
+def _normalize_stock_name(name: str) -> str:
+    """종목명에서 법인 접미어·공백을 제거해 검색 정규화에 사용한다."""
+    n = name.strip()
+    for suffix in ("(주)", "(유)", "주식회사", " 홀딩스", "홀딩스", "(코스닥)", "(코스피)", " Inc.", " Corp.", " Co."):
+        if n.endswith(suffix):
+            n = n[: -len(suffix)].strip()
+    # 내부 공백, 특수 공백 제거
+    n = n.replace(" ", "").replace("\xa0", "").replace("\u200b", "")
+    return n
+
+
+# ---------------------------------------------------------------------------
+# 종목 목록 — fdr → KOSPI+KOSDAQ 분리 → pykrx → DART pkl 순 폴백
 # ---------------------------------------------------------------------------
 def _get_pykrx_stock_list() -> list[dict]:
     """pykrx로 KRX 종목 목록 전체를 가져온다 (fdr 완전 실패 시 폴백)."""
@@ -87,7 +104,7 @@ def _get_pykrx_stock_list() -> list[dict]:
             return []
 
         all_codes: list[str] = []
-        for market in ("KOSPI", "KOSDAQ"):
+        for market in ("KOSPI", "KOSDAQ", "KONEX"):
             try:
                 all_codes += list(pykrx_stock.get_market_ticker_list(date=date_str, market=market))
             except Exception:
@@ -99,6 +116,7 @@ def _get_pykrx_stock_list() -> list[dict]:
                 name = pykrx_stock.get_market_ticker_name(str(code)) or str(code)
             except Exception:
                 name = str(code)
+            # pykrx market 정보 포함 (yfinance suffix 결정에 필요)
             result.append({"code": str(code).zfill(6), "name": name, "market": "KRX"})
         logger.info("pykrx 종목 목록 로드 완료: %d종목", len(result))
         return result
@@ -159,11 +177,26 @@ def _get_dart_corp_codes_stock_list() -> list[dict]:
         return []
 
 
-def get_stock_list() -> list[dict]:
-    """KRX 전체 종목 목록을 가져온다. fdr → KOSPI+KOSDAQ 분리 → pykrx → DART pkl 순 폴백."""
-    global STOCK_LIST_CACHE
-    if STOCK_LIST_CACHE is not None:
+def get_stock_list(force_refresh: bool = False) -> list[dict]:
+    """KRX 전체 종목 목록을 가져온다. fdr → KOSPI+KOSDAQ 분리 → pykrx → DART pkl 순 폴백.
+
+    - STOCK_LIST_CACHE 가 비어있거나 TTL(1시간) 초과 시 자동 갱신
+    - force_refresh=True 이면 캐시를 무효화하고 강제 재조회
+    """
+    global STOCK_LIST_CACHE, _STOCK_LIST_CACHE_TS
+
+    now = time.time()
+    age = now - _STOCK_LIST_CACHE_TS
+    # 유효한 캐시: 비어있지 않고, TTL 이내
+    if not force_refresh and STOCK_LIST_CACHE and age < _STOCK_LIST_CACHE_TTL:
         return STOCK_LIST_CACHE
+
+    # 강제 갱신 또는 캐시 만료 시 재로드
+    if force_refresh:
+        STOCK_LIST_CACHE = None
+        logger.info("STOCK_LIST_CACHE 강제 갱신 요청")
+    elif STOCK_LIST_CACHE and age >= _STOCK_LIST_CACHE_TTL:
+        logger.info("STOCK_LIST_CACHE TTL 만료 (%.0f초) — 갱신", age)
 
     # 1) fdr.StockListing("KRX")
     try:
@@ -171,37 +204,51 @@ def get_stock_list() -> list[dict]:
         result = _parse_fdr_listing_df(df)
         if result:
             STOCK_LIST_CACHE = result
+            _STOCK_LIST_CACHE_TS = time.time()
             logger.info("KRX 종목 목록 fdr(KRX) 로드 완료: %d종목", len(result))
             return STOCK_LIST_CACHE
         logger.warning("fdr.StockListing('KRX') 빈 결과 → KOSPI/KOSDAQ 분리 시도")
     except Exception as e:
         logger.warning("fdr.StockListing('KRX') 실패: %s → KOSPI/KOSDAQ 분리 시도", e)
 
-    # 2) KOSPI + KOSDAQ 분리
+    # 2) KOSPI + KOSDAQ + KONEX 분리
     try:
-        df_kospi = fdr.StockListing("KOSPI")
-        df_kosdaq = fdr.StockListing("KOSDAQ")
-        result = _parse_fdr_listing_df(df_kospi) + _parse_fdr_listing_df(df_kosdaq)
+        dfs = []
+        for market in ("KOSPI", "KOSDAQ", "KONEX"):
+            try:
+                dfs.append(fdr.StockListing(market))
+            except Exception:
+                pass
+        result = []
+        for df in dfs:
+            result += _parse_fdr_listing_df(df)
         if result:
             STOCK_LIST_CACHE = result
-            logger.info("KRX 종목 목록 fdr(KOSPI+KOSDAQ) 로드 완료: %d종목", len(result))
+            _STOCK_LIST_CACHE_TS = time.time()
+            logger.info("KRX 종목 목록 fdr(분리) 로드 완료: %d종목", len(result))
             return STOCK_LIST_CACHE
-        logger.warning("fdr KOSPI/KOSDAQ 분리도 빈 결과 → pykrx 폴백")
+        logger.warning("fdr 분리 조회도 빈 결과 → pykrx 폴백")
     except Exception as e:
-        logger.warning("fdr KOSPI/KOSDAQ 실패: %s → pykrx 폴백", e)
+        logger.warning("fdr 분리 조회 실패: %s → pykrx 폴백", e)
 
     # 3) pykrx 폴백
     result = _get_pykrx_stock_list()
     if result:
         STOCK_LIST_CACHE = result
+        _STOCK_LIST_CACHE_TS = time.time()
         return STOCK_LIST_CACHE
     logger.warning("pykrx 종목 목록도 실패 → DART corp codes 폴백 시도")
 
     # 4) DART corp codes pkl 폴백
     result = _get_dart_corp_codes_stock_list()
-    STOCK_LIST_CACHE = result
-    if not result:
+    if result:
+        STOCK_LIST_CACHE = result
+        _STOCK_LIST_CACHE_TS = time.time()
+    else:
         logger.error("종목 목록 모든 소스 실패 — 검색/종목명 표시 불가")
+        # 실패 시에도 빈 리스트를 캐시하되, TTL을 짧게 설정 (5분 후 재시도)
+        STOCK_LIST_CACHE = []
+        _STOCK_LIST_CACHE_TS = now - (_STOCK_LIST_CACHE_TTL - 300)
     return STOCK_LIST_CACHE
 
 
@@ -216,17 +263,48 @@ def _pykrx_name(code: str) -> str | None:
 
 
 def search_stocks(query: str) -> list[dict]:
-    """종목명 또는 코드로 검색한다. 목록이 비어있어도 6자리 코드 직접 조회를 시도한다."""
+    """종목명 또는 코드로 검색한다.
+
+    - 종목명 정규화 매칭 (접미어 제거, 공백 제거)
+    - 목록 미히트 시 목록 강제 갱신 후 재시도
+    - 6자리 코드 입력 시 pykrx 직접 조회
+    """
     stocks = get_stock_list()
     query_stripped = query.strip()
     query_upper = query_stripped.upper()
-    results = []
+    query_norm = _normalize_stock_name(query_stripped).upper()
+    results: list[dict] = []
 
     for s in stocks:
-        if query_upper in s["name"].upper() or query_upper in s["code"]:
+        name_upper = s["name"].upper()
+        name_norm = _normalize_stock_name(s["name"]).upper()
+        if (
+            query_upper in name_upper
+            or query_upper in name_norm
+            or query_norm in name_upper
+            or query_norm in name_norm
+            or query_upper in s["code"]
+        ):
             results.append(s)
         if len(results) >= 20:
             break
+
+    # 결과 없음: 캐시가 오래됐을 수 있으므로 강제 갱신 후 재시도 (1회)
+    if not results and len(query_stripped) >= 2:
+        stocks = get_stock_list(force_refresh=True)
+        for s in stocks:
+            name_upper = s["name"].upper()
+            name_norm = _normalize_stock_name(s["name"]).upper()
+            if (
+                query_upper in name_upper
+                or query_upper in name_norm
+                or query_norm in name_upper
+                or query_norm in name_norm
+                or query_upper in s["code"]
+            ):
+                results.append(s)
+            if len(results) >= 20:
+                break
 
     # 목록에 없고 6자리 코드 입력 시 → pykrx 단일 조회
     if not results and query_stripped.isdigit() and len(query_stripped) <= 6:
@@ -476,24 +554,132 @@ def _get_pykrx_fundamentals(code: str) -> dict:
     return result
 
 
+def _get_yfinance_ticker(code: str):
+    """종목 코드에 맞는 yfinance Ticker 객체를 반환한다.
+
+    1. STOCK_LIST_CACHE 의 market 필드로 suffix 결정 (.KS / .KQ)
+    2. market 정보가 없거나 'KRX' 일 때는 .KS 먼저 시도, info 없으면 .KQ 로 재시도
+    """
+    import yfinance as yf
+
+    stocks = get_stock_list()
+    market_info = None
+    for s in stocks:
+        if s["code"] == code:
+            market_info = s.get("market", "")
+            break
+
+    if market_info and market_info.upper() == "KOSDAQ":
+        # 확실히 코스닥 → .KQ 만 시도
+        return yf.Ticker(f"{code}.KQ"), f"{code}.KQ"
+
+    if market_info and market_info.upper() == "KOSPI":
+        # 확실히 코스피 → .KS 만 시도
+        return yf.Ticker(f"{code}.KS"), f"{code}.KS"
+
+    # market 정보가 'KRX' 또는 없는 경우 → .KS 먼저, 데이터 없으면 .KQ
+    st_ks = yf.Ticker(f"{code}.KS")
+    try:
+        info_ks = st_ks.info or {}
+        if info_ks.get("shortName") or info_ks.get("longName"):
+            return st_ks, f"{code}.KS"
+    except Exception:
+        pass
+
+    st_kq = yf.Ticker(f"{code}.KQ")
+    return st_kq, f"{code}.KQ"
+
+
+def _fill_from_financial_statements(st, result: dict) -> None:
+    """st.financials / st.cashflow / st.balance_sheet 로 누락 재무 보완.
+
+    yfinance info 에 데이터가 없는 소형주를 위한 fallback.
+    """
+    # ── 영업활동현금흐름 ────────────────────────────────────────────────────────
+    if result.get("영업활동현금흐름") is None:
+        try:
+            cf = st.cashflow
+            if cf is not None and not cf.empty:
+                ocf_keys = [r for r in cf.index if "Operating" in str(r) and "Cash" in str(r)]
+                if not ocf_keys:
+                    ocf_keys = [r for r in cf.index if "Cash Flow" in str(r) and "Operation" in str(r)]
+                if ocf_keys:
+                    v = cf.loc[ocf_keys[0]].iloc[0]
+                    if v is not None and not (isinstance(v, float) and np.isnan(v)):
+                        result["영업활동현금흐름"] = int(float(v))
+        except Exception as e:
+            logger.debug("cashflow fallback 실패: %s", e)
+
+    # ── 매출성장률 / 영업이익률 ────────────────────────────────────────────────
+    if result.get("매출성장률") is None or result.get("영업이익률") is None:
+        try:
+            fin = st.financials
+            if fin is not None and not fin.empty and fin.shape[1] >= 2:
+                # 매출 (Total Revenue)
+                rev_keys = [r for r in fin.index if "Total Revenue" in str(r) or ("Revenue" in str(r) and "Total" in str(r))]
+                if not rev_keys:
+                    rev_keys = [r for r in fin.index if "Revenue" in str(r)]
+
+                # 영업이익 (Operating Income / Operating Profit)
+                op_keys = [r for r in fin.index if "Operating Income" in str(r)]
+                if not op_keys:
+                    op_keys = [r for r in fin.index if "Operating" in str(r) and "Income" in str(r)]
+
+                if rev_keys:
+                    rev0 = float(fin.loc[rev_keys[0]].iloc[0])
+                    if result.get("매출성장률") is None and fin.shape[1] >= 2:
+                        rev1 = float(fin.loc[rev_keys[0]].iloc[1])
+                        if rev1 and rev1 != 0 and not np.isnan(rev0) and not np.isnan(rev1):
+                            result["매출성장률"] = round((rev0 - rev1) / abs(rev1) * 100, 2)
+
+                    if result.get("영업이익률") is None and op_keys and not np.isnan(rev0) and rev0 != 0:
+                        op0 = float(fin.loc[op_keys[0]].iloc[0])
+                        if not np.isnan(op0):
+                            result["영업이익률"] = round(op0 / rev0 * 100, 2)
+        except Exception as e:
+            logger.debug("financials fallback 실패: %s", e)
+
+    # ── 부채비율 ───────────────────────────────────────────────────────────────
+    if result.get("부채비율") is None:
+        try:
+            bs = st.balance_sheet
+            if bs is not None and not bs.empty:
+                debt_keys = [r for r in bs.index if "Total Debt" in str(r)]
+                if not debt_keys:
+                    debt_keys = [r for r in bs.index if "Long Term Debt" in str(r)]
+                eq_keys = [r for r in bs.index if "Stockholders" in str(r) and "Equity" in str(r)]
+                if not eq_keys:
+                    eq_keys = [r for r in bs.index if "Total Equity" in str(r)]
+
+                if debt_keys and eq_keys:
+                    debt = float(bs.loc[debt_keys[0]].iloc[0])
+                    equity = float(bs.loc[eq_keys[0]].iloc[0])
+                    if (
+                        equity and equity > 0
+                        and not np.isnan(debt) and not np.isnan(equity)
+                    ):
+                        result["부채비율"] = round(debt / equity * 100, 1)
+        except Exception as e:
+            logger.debug("balance_sheet fallback 실패: %s", e)
+
+
 def _get_yfinance_fundamentals(code: str) -> dict:
-    """yfinance로 보조 재무 (부채비율, 매출성장률 등). FDR 폴백 경로에서 사용."""
-    result = {
+    """yfinance로 보조 재무 (부채비율, 매출성장률 등). FDR/KIS 경로 모두에서 사용.
+
+    - st.info 우선 (대형주/코스피200)
+    - info 에 데이터 없으면 st.financials / st.cashflow / st.balance_sheet 로 보완 (소형주 지원)
+    - market suffix 자동 감지 (.KS / .KQ)
+    """
+    result: dict = {
         "PBR": None, "ROE": None,
         "매출성장률": None, "부채비율": None, "영업이익률": None,
         "영업활동현금흐름": None, "영문종목명": None,
     }
     try:
-        import yfinance as yf
-        # KOSDAQ 여부 판단
-        stocks = get_stock_list()
-        ticker_suffix = ".KS"
-        for s in stocks:
-            if s["code"] == code and s.get("market") == "KOSDAQ":
-                ticker_suffix = ".KQ"
-                break
-        st = yf.Ticker(f"{code}{ticker_suffix}")
+        st, ticker_str = _get_yfinance_ticker(code)
         info = st.info or {}
+
+        # ── info 기반 (대형주·코스피200에서 주로 채워짐) ──────────────────────
         if info.get("priceToBook"):
             result["PBR"] = round(float(info["priceToBook"]), 2)
         if info.get("returnOnEquity"):
@@ -507,6 +693,23 @@ def _get_yfinance_fundamentals(code: str) -> dict:
         if info.get("operatingCashflow"):
             result["영업활동현금흐름"] = int(info["operatingCashflow"])
         result["영문종목명"] = info.get("longName") or info.get("shortName")
+
+        # ── 재무제표 fallback (소형주 — info 에 데이터 없는 경우 보완) ──────────
+        needs_fallback = (
+            result["매출성장률"] is None
+            or result["영업이익률"] is None
+            or result["영업활동현금흐름"] is None
+            or result["부채비율"] is None
+        )
+        if needs_fallback:
+            _fill_from_financial_statements(st, result)
+
+        logger.debug(
+            "_get_yfinance_fundamentals [%s] ticker=%s 매출성장률=%s 영업이익률=%s OCF=%s 부채비율=%s",
+            code, ticker_str,
+            result["매출성장률"], result["영업이익률"],
+            result["영업활동현금흐름"], result["부채비율"],
+        )
     except Exception as e:
         logger.warning("_get_yfinance_fundamentals [%s]: %s", code, e)
     return result
@@ -612,12 +815,8 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
         try:
             import yfinance as yf
             yf_period_map = {"1m": "1mo", "3m": "3mo", "6m": "6mo", "1y": "1y"}
-            suffix = ".KS"
-            for s in get_stock_list():
-                if s["code"] == code and s.get("market") == "KOSDAQ":
-                    suffix = ".KQ"
-                    break
-            st = yf.Ticker(f"{code}{suffix}")
+            _, ticker_str = _get_yfinance_ticker(code)
+            st = yf.Ticker(ticker_str)
             df_yf = st.history(period=yf_period_map.get(period, "3mo"))
             if not df_yf.empty:
                 df = df_yf
@@ -627,7 +826,7 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
                 low_col   = next((c for c in cols if c in ("Low",   "저가")), None)
                 close_col = next((c for c in cols if c in ("Close", "종가")), None)
                 vol_col   = next((c for c in cols if c in ("Volume", "거래량")), None)
-                logger.info("yfinance 차트 폴백 사용 [%s]", code)
+                logger.info("yfinance 차트 폴백 사용 [%s]", ticker_str)
         except Exception as e:
             logger.warning("yfinance 차트 폴백 실패 [%s]: %s", code, e)
 
@@ -732,8 +931,6 @@ async def get_structured_analysis_data(code: str) -> dict | None:
 
     # 4. 수급 — get_stock_price_async가 이미 조회한 _investor 재사용 (중복 호출 없음)
     investor = price.get("_investor") or {}
-    # KIS: inst_net_buy/fore_net_buy로 직접 계산
-    # FDR: supply_pct와 market_cap이 _investor에 미리 계산되어 있음
     supply_raw = investor.get("display") or price.get("수급") or "정보 없음"
     market_cap = price.get("market_cap") or investor.get("market_cap")
     supply_pct = investor.get("supply_pct")  # FDR 경로에서 이미 계산됨

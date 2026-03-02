@@ -3,7 +3,7 @@
 :root {
   --background: #001F3F;
   --foreground: #ededed;
-  --ad-banner-height: 50px;
+  --ad-banner-height: 60px;
 }
 
 @theme inline {
