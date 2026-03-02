@@ -10,20 +10,33 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 _client_instance = None
+_client_loop_id: int = -1  # asyncio.run()은 요청마다 새 루프를 생성/파괴하므로 추적 필요
 _MODEL_NAME = "gemini-2.5-flash"
 
 
 def _get_client() -> genai.Client:
-    global _client_instance
-    if _client_instance is not None:
-        return _client_instance
-    settings = get_settings()
-    api_key = (settings.gemini_api_key or "").strip()
-    if not api_key:
-        raise ValueError(
-            "Gemini API 키가 설정되지 않았습니다. backend/.env에 GEMINI_API_KEY를 넣어 주세요."
-        )
-    _client_instance = genai.Client(api_key=api_key)
+    """genai.Client 싱글톤 — 이벤트 루프가 바뀌면 클라이언트를 재생성한다.
+
+    Cloud Functions에서 asyncio.run()은 요청마다 새 이벤트 루프를 생성하고 파괴한다.
+    genai.Client 내부의 비동기 HTTP 클라이언트는 생성 시점의 루프에 묶이므로,
+    루프가 닫힌 뒤 재사용하면 'Event loop is closed' 오류가 발생한다.
+    루프 ID가 변경될 때마다 새 클라이언트를 생성해 이 문제를 방지한다.
+    """
+    global _client_instance, _client_loop_id
+    try:
+        loop_id = id(asyncio.get_running_loop())
+    except RuntimeError:
+        loop_id = -1
+
+    if _client_instance is None or _client_loop_id != loop_id:
+        settings = get_settings()
+        api_key = (settings.gemini_api_key or "").strip()
+        if not api_key:
+            raise ValueError(
+                "Gemini API 키가 설정되지 않았습니다. backend/.env에 GEMINI_API_KEY를 넣어 주세요."
+            )
+        _client_instance = genai.Client(api_key=api_key)
+        _client_loop_id = loop_id
     return _client_instance
 
 

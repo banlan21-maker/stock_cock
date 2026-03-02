@@ -170,6 +170,16 @@ function AnalysisTab({ code }: { code: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, hasStarted]);
 
+  // SSE 버퍼링으로 실시간 스텝 수신이 불가한 환경에서 타이머로 스텝 자동 진행
+  // (실제 SSE 이벤트가 먼저 오면 Math.max로 앞서 나간 스텝을 보존)
+  useEffect(() => {
+    if (!loading) return;
+    const t1 = setTimeout(() => setCurrentStep((s) => Math.max(s, 1)), 2000);
+    const t2 = setTimeout(() => setCurrentStep((s) => Math.max(s, 2)), 10000);
+    const t3 = setTimeout(() => setCurrentStep((s) => Math.max(s, 3)), 20000);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [loading]);
+
   if (!hasStarted && !analysis) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center space-y-4">
