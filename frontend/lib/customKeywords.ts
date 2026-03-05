@@ -46,3 +46,43 @@ export function clearCustomKeywords(): void {
     // ignore
   }
 }
+
+// ── 키워드 피드 캐시 (30분 TTL) ──────────────────────────────────
+const FEED_CACHE_KEY = "stockcock_feed_cache";
+const FEED_CACHE_TTL = 30 * 60 * 1000; // 30분
+
+interface FeedCache {
+  query: string;
+  data: unknown;
+  ts: number;
+}
+
+export function getKeywordFeedCache(query: string): unknown | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(FEED_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as FeedCache;
+    if (cache.query !== query) return null;
+    if (Date.now() - cache.ts > FEED_CACHE_TTL) return null;
+    return cache.data;
+  } catch {
+    return null;
+  }
+}
+
+export function setKeywordFeedCache(query: string, data: unknown): void {
+  try {
+    localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ query, data, ts: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+export function clearKeywordFeedCache(): void {
+  try {
+    localStorage.removeItem(FEED_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}

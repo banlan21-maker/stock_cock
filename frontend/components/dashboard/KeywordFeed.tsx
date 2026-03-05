@@ -2,10 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { fetchKeywordFeed, fetchThemeTrend } from "@/lib/api";
-import { getCustomKeywords, setCustomKeywords, getCustomKeywordsQuery } from "@/lib/customKeywords";
+import {
+  getCustomKeywords,
+  setCustomKeywords,
+  clearCustomKeywords,
+  getCustomKeywordsQuery,
+  getKeywordFeedCache,
+  setKeywordFeedCache,
+  clearKeywordFeedCache,
+} from "@/lib/customKeywords";
 import type { KeywordFeedResponse, KeywordStock } from "@/types";
 import Link from "next/link";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, X } from "lucide-react";
 
 export default function KeywordFeed() {
   const [kw1, setKw1] = useState("");
@@ -13,31 +21,72 @@ export default function KeywordFeed() {
   const [feed, setFeed] = useState<KeywordFeedResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [autoSource, setAutoSource] = useState(""); // 자동 적용 시 출처 표시
+  const [autoSource, setAutoSource] = useState("");
+  const [fromCache, setFromCache] = useState(false);
 
   const applyKeywords = (k1: string, k2: string, source = "") => {
     const kws = [k1, k2].filter((k) => k.trim()).join(",");
     if (!kws) return;
     setCustomKeywords(k1, k2);
     setAutoSource(source);
-    setLoading(true);
     setError("");
+
+    // 캐시 확인 (같은 키워드 + 30분 이내)
+    const cached = getKeywordFeedCache(kws) as KeywordFeedResponse | null;
+    if (cached) {
+      setFeed(cached);
+      setFromCache(true);
+      return;
+    }
+
+    setFromCache(false);
+    setLoading(true);
     fetchKeywordFeed(kws)
-      .then(setFeed)
+      .then((data) => {
+        setFeed(data);
+        setKeywordFeedCache(kws, data);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  const handleApply = () => {
+    // 수동 적용 시 캐시 무시하고 새로 fetch
+    const kws = [kw1, kw2].filter((k) => k.trim()).join(",");
+    if (!kws) return;
+    setCustomKeywords(kw1, kw2);
+    setAutoSource("");
+    setError("");
+    setFromCache(false);
+    setLoading(true);
+    fetchKeywordFeed(kws)
+      .then((data) => {
+        setFeed(data);
+        setKeywordFeedCache(kws, data);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  const handleClear = () => {
+    clearCustomKeywords();
+    clearKeywordFeedCache();
+    setKw1("");
+    setKw2("");
+    setFeed(null);
+    setError("");
+    setAutoSource("");
+    setFromCache(false);
   };
 
   // 마운트: 저장된 키워드 복원 or 테마 top2 자동 적용
   useEffect(() => {
     const saved = getCustomKeywords();
     if (saved.kw1 || saved.kw2) {
-      // 저장된 키워드 복원
       setKw1(saved.kw1);
       setKw2(saved.kw2);
       applyKeywords(saved.kw1, saved.kw2);
     } else {
-      // 저장된 키워드 없음 → 테마 트렌드 상위 2개 자동 적용
       setLoading(true);
       fetchThemeTrend("change_rate", "daily")
         .then((res) => {
@@ -54,13 +103,11 @@ export default function KeywordFeed() {
         })
         .catch(() => setLoading(false));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleApply = () => {
-    applyKeywords(kw1, kw2);
-  };
-
   const currentQuery = getCustomKeywordsQuery();
+  const hasKeywords = kw1.trim() || kw2.trim();
 
   return (
     <section>
@@ -92,19 +139,32 @@ export default function KeywordFeed() {
             placeholder="키워드 예: 반도체"
             className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:border-skyblue/50"
           />
-          <button
-            type="button"
-            onClick={handleApply}
-            disabled={loading || (!kw1.trim() && !kw2.trim())}
-            className="w-full sm:w-auto px-4 py-2 bg-skyblue/20 text-skyblue rounded-lg text-sm hover:bg-skyblue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 whitespace-nowrap flex-shrink-0"
-          >
-            <Search className="w-4 h-4" />
-            적용
-          </button>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={loading || !hasKeywords}
+              className="flex-1 sm:flex-none px-4 py-2 bg-skyblue/20 text-skyblue rounded-lg text-sm hover:bg-skyblue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 whitespace-nowrap"
+            >
+              <Search className="w-4 h-4" />
+              적용
+            </button>
+            {(hasKeywords || feed) && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="flex-1 sm:flex-none px-4 py-2 bg-white/5 text-gray-400 rounded-lg text-sm hover:bg-red-500/10 hover:text-red-400 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap border border-white/10"
+              >
+                <X className="w-4 h-4" />
+                비우기
+              </button>
+            )}
+          </div>
         </div>
         {currentQuery && (
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5">
             뉴스·정책 페이지에도 <span className="text-skyblue">'{currentQuery.split(",").join(", ")}'</span> 필터가 적용됩니다
+            {fromCache && <span className="text-gray-600">· 캐시</span>}
           </p>
         )}
       </div>
