@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ArrowLeftRight, Trophy, Star, AlertTriangle, Loader2 } from "lucide-react";
+import { Search, ArrowLeftRight, Trophy, Star, AlertTriangle, Loader2, PlayCircle } from "lucide-react";
 import { searchStocks, fetchStockCompare } from "@/lib/api";
+import { useReward } from "@/context/RewardProvider";
 import type { StockSearchResult, StockCompareResult } from "@/types";
 
 // ── 종목 선택 입력창 ─────────────────────────────────────────────
@@ -217,7 +218,9 @@ export default function StockCompare() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleCompare = async () => {
+  const { requestReward } = useReward();
+
+  const handleCompare = () => {
     if (!stockA || !stockB) {
       setError("두 종목을 모두 선택해주세요.");
       return;
@@ -226,17 +229,20 @@ export default function StockCompare() {
       setError("서로 다른 종목을 선택해주세요.");
       return;
     }
-    setLoading(true);
     setError("");
     setResult(null);
-    try {
-      const data = await fetchStockCompare(stockA.code, stockB.code);
-      setResult(data);
-    } catch (e: any) {
-      setError(e?.message || "비교 분석 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
+
+    requestReward(async () => {
+      setLoading(true);
+      try {
+        const data = await fetchStockCompare(stockA.code, stockB.code);
+        setResult(data);
+      } catch (e: any) {
+        setError(e?.message || "비교 분석 중 오류가 발생했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   return (
@@ -264,11 +270,17 @@ export default function StockCompare() {
             </>
           ) : (
             <>
-              <Trophy className="w-4 h-4" />
-              투자가치 비교하기
+              <PlayCircle className="w-4 h-4" />
+              광고 보고 투자가치 비교하기
             </>
           )}
         </button>
+
+        {!loading && (
+          <p className="text-center text-xs text-gray-500">
+            짧은 광고 시청 후 AI 비교 분석 결과를 무료로 확인하세요
+          </p>
+        )}
       </div>
 
       {error && (
