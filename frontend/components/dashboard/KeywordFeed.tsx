@@ -75,14 +75,14 @@ export default function KeywordFeed() {
 
       {/* 입력 영역 */}
       <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={kw1}
             onChange={(e) => setKw1(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleApply()}
             placeholder="키워드 예: AI"
-            className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:border-skyblue/50"
+            className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:border-skyblue/50"
           />
           <input
             type="text"
@@ -90,13 +90,13 @@ export default function KeywordFeed() {
             onChange={(e) => setKw2(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleApply()}
             placeholder="키워드 예: 반도체"
-            className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:border-skyblue/50"
+            className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:border-skyblue/50"
           />
           <button
             type="button"
             onClick={handleApply}
             disabled={loading || (!kw1.trim() && !kw2.trim())}
-            className="px-4 py-2 bg-skyblue/20 text-skyblue rounded-lg text-sm hover:bg-skyblue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
+            className="w-full sm:w-auto px-4 py-2 bg-skyblue/20 text-skyblue rounded-lg text-sm hover:bg-skyblue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 whitespace-nowrap flex-shrink-0"
           >
             <Search className="w-4 h-4" />
             적용
