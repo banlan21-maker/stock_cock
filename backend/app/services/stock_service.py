@@ -575,6 +575,12 @@ def _get_yfinance_ticker(code: str):
     """
     import yfinance as yf
 
+    # 지수 코드 특별 처리 (FDR: KS11/KQ11, Yahoo: ^KS11/^KQ11)
+    _INDEX_MAP = {"KS11": "^KS11", "KQ11": "^KQ11"}
+    if code in _INDEX_MAP:
+        ticker_str = _INDEX_MAP[code]
+        return yf.Ticker(ticker_str), ticker_str
+
     stocks = get_stock_list()
     market_info = None
     for s in stocks:
