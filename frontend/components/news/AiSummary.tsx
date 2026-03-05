@@ -1,6 +1,7 @@
 "use client";
 
 import { Sparkles, Rocket } from "lucide-react";
+import AiDisclaimer from "@/components/ui/AiDisclaimer";
 import { sanitizeNewsTitle } from "@/lib/sanitizeTitle";
 
 interface AiSummaryProps {
@@ -129,6 +130,7 @@ export default function AiSummary({ title, aiSummary, url }: AiSummaryProps) {
           </div>
         </div>
       )}
+      <AiDisclaimer />
     </div>
   );
 }

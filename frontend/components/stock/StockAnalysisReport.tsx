@@ -2,6 +2,7 @@
 
 import { Star, Sparkles } from "lucide-react";
 import type { StockAnalysis } from "@/types";
+import AiDisclaimer from "@/components/ui/AiDisclaimer";
 
 interface StockAnalysisReportProps {
   analysis: StockAnalysis;
@@ -61,6 +62,7 @@ export default function StockAnalysisReport({ analysis }: StockAnalysisReportPro
         </div>
         <p className="text-sm text-gray-200">{analysis.overall_comment}</p>
       </div>
+      <AiDisclaimer />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   CheckCircle,
   RefreshCw,
 } from "lucide-react";
+import AiDisclaimer from "@/components/ui/AiDisclaimer";
 import { fetchPortfolioAnalysisStream } from "@/lib/portfolio";
 import type { PortfolioAIAnalysis } from "@/types";
 
@@ -227,6 +228,7 @@ export default function AIAnalysisReport() {
         분석 시각: {new Date(result.analyzed_at).toLocaleString("ko-KR")}
         {" · "}24시간 캐시됨
       </p>
+      <AiDisclaimer />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search, ArrowLeftRight, Trophy, Star, AlertTriangle, Loader2, PlayCircle } from "lucide-react";
 import { searchStocks, fetchStockCompare } from "@/lib/api";
 import { useReward } from "@/context/RewardProvider";
+import AiDisclaimer from "@/components/ui/AiDisclaimer";
 import type { StockSearchResult, StockCompareResult } from "@/types";
 
 // ── 종목 선택 입력창 ─────────────────────────────────────────────
@@ -206,6 +207,7 @@ function CompareResult({ result }: { result: StockCompareResult }) {
           </div>
         ))}
       </div>
+      <AiDisclaimer />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Sparkles, ExternalLink, Rocket } from "lucide-react";
+import AiDisclaimer from "@/components/ui/AiDisclaimer";
 import type { PolicyInfo } from "@/types";
 
 interface PolicyAnalysisProps {
@@ -143,6 +144,7 @@ export default function PolicyAnalysis({ policy }: PolicyAnalysisProps) {
           </div>
         </div>
       )}
+      <AiDisclaimer />
     </div>
   );
 }
