@@ -18,14 +18,33 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+async def _prewarm_stock_list() -> None:
+    """서버 시작 직후 종목 목록 캐시를 백그라운드에서 미리 채운다.
+
+    - asyncio.to_thread()로 블로킹 I/O를 스레드 풀에 위임 → 이벤트 루프 블록 없음
+    - 60초 타임아웃: 실패해도 서버 기동에 영향 없음
+    """
+    try:
+        from app.services import stock_service as _ss
+        await asyncio.wait_for(
+            asyncio.to_thread(_ss.get_stock_list),
+            timeout=60.0,
+        )
+        logger.info("Stock list pre-warm 완료: %d종목", len(_ss.STOCK_LIST_CACHE or []))
+    except asyncio.TimeoutError:
+        logger.warning("Stock list pre-warm 타임아웃 (60초) — 첫 요청 시 on-demand 로드")
+    except Exception as e:
+        logger.warning("Stock list pre-warm 실패: %s — 첫 요청 시 on-demand 로드", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """서버 시작/종료 시 실행되는 lifespan 컨텍스트.
 
-    NOTE: warmup_all()은 동기 Supabase 호출(get_generic_cache)을 내부적으로 수행하므로
-    asyncio 이벤트 루프를 블록하여 첫 번째 요청이 무한 대기 상태에 빠지는 문제가 있습니다.
-    캐시 pre-warm은 제거하고 첫 실제 요청 시 on-demand로 채워지도록 합니다.
+    종목 목록 캐시를 백그라운드 태스크로 pre-warm한다.
+    create_task()를 사용하므로 lifespan은 즉시 yield → 서버가 바로 요청을 수락한다.
     """
+    asyncio.create_task(_prewarm_stock_list())
     yield
 
 
