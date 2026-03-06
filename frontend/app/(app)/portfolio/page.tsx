@@ -268,7 +268,11 @@ function HoldingsTab() {
         <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center text-gray-400">
           <Briefcase className="w-8 h-8 mx-auto mb-3 opacity-30" />
           <p className="text-lg mb-2">보유 종목이 없어요.</p>
-          <p className="text-sm mb-6">종목 추가 버튼으로 포트폴리오를 시작해 보세요.</p>
+          <p className="text-sm mb-2">종목을 추가하면 수익률을 추적하고</p>
+          <p className="text-sm mb-6 flex items-center justify-center gap-1">
+            <Brain className="w-4 h-4 text-purple-400" />
+            <span className="text-purple-300 font-medium">AI가 포트폴리오를 진단</span>해드려요.
+          </p>
           <button
             onClick={() => { setEditTarget(null); setShowModal(true); }}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-skyblue text-black font-semibold rounded-lg text-sm"

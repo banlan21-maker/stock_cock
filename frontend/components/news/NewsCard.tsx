@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Sparkles, TrendingUp } from "lucide-react";
 import { sanitizeNewsTitle } from "@/lib/sanitizeTitle";
 import type { NewsArticle } from "@/types";
 
@@ -29,16 +30,28 @@ export default function NewsCard({ news }: NewsCardProps) {
       className="block bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="flex-1 min-w-0">
           <span
             className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 ${style}`}
           >
             {categoryLabels[news.category] ?? news.category}
           </span>
           <p className="font-medium text-lg">{sanitizeNewsTitle(news.title)}</p>
-          <p className="text-xs text-gray-400 mt-2">
-            {news.source} &middot; {new Date(news.published_at).toLocaleDateString("ko-KR")}
-          </p>
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
+            <p className="text-xs text-gray-400">
+              {news.source} &middot; {new Date(news.published_at).toLocaleDateString("ko-KR")}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 text-[10px] text-skyblue/70">
+                <Sparkles className="w-3 h-3" /> AI 분석
+              </span>
+              {news.related_stocks?.length > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-amber-400/80">
+                  <TrendingUp className="w-3 h-3" /> 관련 종목 {news.related_stocks.length}개
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </Link>
