@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Treemap, ResponsiveContainer } from "recharts";
+import { X, ExternalLink } from "lucide-react";
 import { fetchThemeTrend } from "@/lib/api";
 import type { ThemeGroup, ThemeTrendResponse } from "@/types";
 
@@ -129,16 +131,26 @@ export default function ThemeTrend() {
   const [response, setResponse] = useState<ThemeTrendResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<ThemeGroup | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setError("");
     setResponse(null);
+    setSelectedGroup(null);
     fetchThemeTrend(sort, period)
       .then(setResponse)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [sort, period]);
+
+  function handleTreemapClick(data: { name?: string }) {
+    if (!data.name) return;
+    const group = groups.find((g) => g.theme === data.name);
+    setSelectedGroup((prev) =>
+      prev?.theme === data.name ? null : (group ?? null)
+    );
+  }
 
   const groups: ThemeGroup[] = response?.groups ?? [];
   const subtitle = response?.trade_date
@@ -219,16 +231,77 @@ export default function ThemeTrend() {
           거래 데이터를 불러올 수 없습니다
         </div>
       ) : (
-        <div className="w-full h-[480px] bg-white/5 border border-white/10 rounded-xl overflow-hidden p-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treemapData}
-              dataKey="value"
-              aspectRatio={4 / 3}
-              content={(props) => <ThemeTreemapContent {...props} />}
-            />
-          </ResponsiveContainer>
-        </div>
+        <>
+          <p className="text-xs text-gray-500 mb-2">테마를 클릭하면 관련 종목을 확인할 수 있어요</p>
+          <div className="w-full h-[480px] bg-white/5 border border-white/10 rounded-xl overflow-hidden p-1 cursor-pointer">
+            <ResponsiveContainer width="100%" height="100%">
+              <Treemap
+                data={treemapData}
+                dataKey="value"
+                aspectRatio={4 / 3}
+                content={(props) => <ThemeTreemapContent {...props} />}
+                onClick={handleTreemapClick}
+              />
+            </ResponsiveContainer>
+          </div>
+
+          {selectedGroup && (
+            <div className="mt-3 bg-white/5 border border-skyblue/30 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-sm">{selectedGroup.theme}</h3>
+                  <p className="text-xs text-gray-400">
+                    테마 평균{" "}
+                    <span className={Number(selectedGroup.avg_change_rate) >= 0 ? "text-red-400" : "text-blue-400"}>
+                      {Number(selectedGroup.avg_change_rate) > 0 ? "+" : ""}
+                      {Number(selectedGroup.avg_change_rate).toFixed(2)}%
+                    </span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href="/issues"
+                    className="text-xs text-skyblue hover:underline flex items-center gap-1"
+                  >
+                    관련 뉴스 <ExternalLink className="w-3 h-3" />
+                  </Link>
+                  <button
+                    onClick={() => setSelectedGroup(null)}
+                    className="text-gray-500 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {selectedGroup.stocks.map((stock) => (
+                  <Link
+                    key={stock.code}
+                    href={`/stock/${stock.code}`}
+                    className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate">{stock.name}</p>
+                      <p className="text-xs text-gray-500">{stock.code}</p>
+                    </div>
+                    <p
+                      className={`text-xs font-bold ml-2 shrink-0 ${
+                        stock.change_rate > 0
+                          ? "text-red-400"
+                          : stock.change_rate < 0
+                          ? "text-blue-400"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {stock.change_rate > 0 ? "+" : ""}
+                      {Number(stock.change_rate).toFixed(2)}%
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

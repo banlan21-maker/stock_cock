@@ -58,16 +58,27 @@ function DisclosureCard({ item }: { item: DisclosureItem }) {
 
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden transition-colors hover:border-white/20">
-      {/* 헤더 (클릭 → AI 분석 펼치기) */}
-      <button
-        onClick={loadAnalysis}
-        className="w-full p-4 flex items-start gap-3 text-left"
-      >
+      {/* 헤더 */}
+      <div className="p-4 flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-sm">{item.corp_name}</span>
+            {item.stock_code ? (
+              <Link
+                href={`/stock/${item.stock_code}`}
+                className="font-semibold text-sm hover:text-skyblue transition-colors"
+              >
+                {item.corp_name}
+              </Link>
+            ) : (
+              <span className="font-semibold text-sm">{item.corp_name}</span>
+            )}
             {item.stock_code && (
-              <span className="text-[10px] text-gray-500">{item.stock_code}</span>
+              <Link
+                href={`/stock/${item.stock_code}`}
+                className="text-[10px] text-skyblue hover:underline"
+              >
+                {item.stock_code}
+              </Link>
             )}
             {analysis && (
               <span
@@ -80,15 +91,20 @@ function DisclosureCard({ item }: { item: DisclosureItem }) {
           <p className="text-xs text-gray-300 mt-0.5 line-clamp-1">{item.report_nm}</p>
           <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(item.rcept_dt)}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+        {/* AI 분석 펼치기 버튼 */}
+        <button
+          onClick={loadAnalysis}
+          className="flex items-center gap-1 shrink-0 mt-0.5 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+        >
           {loading && <Loader2 className="w-3.5 h-3.5 text-skyblue animate-spin" />}
+          AI 분석
           {expanded ? (
-            <ChevronUp className="w-4 h-4 text-gray-400" />
+            <ChevronUp className="w-3.5 h-3.5" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-3.5 h-3.5" />
           )}
-        </div>
-      </button>
+        </button>
+      </div>
 
       {/* AI 분석 패널 */}
       {expanded && (
