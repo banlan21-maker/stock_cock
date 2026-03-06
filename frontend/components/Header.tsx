@@ -13,6 +13,7 @@ export default async function Header() {
                 <Link href="/" className="flex items-center gap-2 font-bold text-xl">
                     <Rocket className="w-6 h-6 text-blue-500" />
                     <span>Stock Cock</span>
+                    <span className="text-xs text-gray-400 font-normal">v0.1.0</span>
                 </Link>
 
                 <div className="flex items-center gap-4">

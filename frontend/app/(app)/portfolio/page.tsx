@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Plus, Brain, Star, Briefcase, Search, BookOpen, PieChart } from "lucide-react";
+import { Plus, Brain, Star, Briefcase, Search, BookOpen, PieChart, Lock, LogIn } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/utils/supabase/client";
 import { fetchPortfolioWithPrice, addHolding, updateHolding, deleteHolding } from "@/lib/portfolio";
 import { getWatchlist, removeWatchlist } from "@/lib/watchlist";
 import { fetchStockPrice } from "@/lib/api";
@@ -300,6 +301,15 @@ function PortfolioPageInner() {
     tabParam === "journal" ? "journal" :
     "holdings";
 
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsLoggedIn(!!user);
+    });
+  }, []);
+
   function setTab(tab: Tab) {
     const params = new URLSearchParams(searchParams.toString());
     if (tab === "holdings") {
@@ -358,9 +368,28 @@ function PortfolioPageInner() {
       </div>
 
       {/* 탭 콘텐츠 */}
-      {activeTab === "holdings" && <HoldingsTab />}
-      {activeTab === "watchlist" && <WatchlistTab />}
-      {activeTab === "journal" && <JournalTab />}
+      {isLoggedIn === null && <LoadingSpinner text="불러오는 중..." />}
+      {isLoggedIn === false && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center text-gray-400">
+          <Lock className="w-8 h-8 mx-auto mb-3 opacity-30" />
+          <p className="text-lg mb-2">로그인이 필요합니다.</p>
+          <p className="text-sm mb-6">로그인 후 포트폴리오를 이용해 보세요.</p>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-skyblue text-black font-semibold rounded-lg text-sm hover:bg-skyblue/90 transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            로그인하러 가기
+          </Link>
+        </div>
+      )}
+      {isLoggedIn === true && (
+        <>
+          {activeTab === "holdings" && <HoldingsTab />}
+          {activeTab === "watchlist" && <WatchlistTab />}
+          {activeTab === "journal" && <JournalTab />}
+        </>
+      )}
     </div>
   );
 }
