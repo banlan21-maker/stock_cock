@@ -52,18 +52,24 @@ function ScoreDots({ score }: { score: number }) {
   );
 }
 
+const MAX_AUTO_RETRIES = 2;
+
 export default function AIAnalysisReport() {
   const [status, setStatus] = useState<{ step: number; message: string } | null>(null);
   const [result, setResult] = useState<PortfolioAIAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
+  const autoRetryRef = useRef(0);
 
-  async function run() {
+  async function run(isAutoRetry = false) {
+    if (!isAutoRetry) {
+      autoRetryRef.current = 0;
+      setResult(null);
+      setError(null);
+    }
     setLoading(true);
     setStatus(null);
-    setResult(null);
-    setError(null);
 
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -92,10 +98,15 @@ export default function AIAnalysisReport() {
       return;
     }
 
-    // SSE 루프가 done/error 없이 종료된 경우 (Cloud Functions 버퍼링 오류 등)
+    // SSE 루프가 done/error 없이 종료된 경우 → 자동 재시도
     if (!gotResult) {
-      setError("분석 결과를 받지 못했습니다. 다시 시도해 주세요.");
-      setLoading(false);
+      if (autoRetryRef.current < MAX_AUTO_RETRIES) {
+        autoRetryRef.current++;
+        run(true);
+      } else {
+        setError("분석 결과를 받지 못했습니다. 다시 시도해 주세요.");
+        setLoading(false);
+      }
     }
   }
 

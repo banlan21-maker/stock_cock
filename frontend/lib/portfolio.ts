@@ -254,11 +254,12 @@ export async function* fetchPortfolioAnalysisStream(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      // done=true일 때 value는 undefined — decoder를 flush해서 남은 바이트 처리
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
 
       const parts = buffer.split("\n\n");
-      buffer = parts.pop() ?? "";
+      // 스트림이 끝나면 버퍼를 비우고 모든 파트 처리 (마지막 이벤트가 \n\n 없이 끝나는 경우 대비)
+      buffer = done ? "" : (parts.pop() ?? "");
 
       for (const part of parts) {
         const lines = part.split("\n");
@@ -282,6 +283,8 @@ export async function* fetchPortfolioAnalysisStream(
           // JSON 파싱 실패 무시
         }
       }
+
+      if (done) break;
     }
   } finally {
     reader.releaseLock();
