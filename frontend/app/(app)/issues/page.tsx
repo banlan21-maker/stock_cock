@@ -7,7 +7,8 @@ import type { NewsListResponse } from "@/types";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import NewsCard from "@/components/news/NewsCard";
-import { X, Globe } from "lucide-react";
+import Link from "next/link";
+import { X, Globe, Settings } from "lucide-react";
 
 const categories = [
   { value: "all", label: "전체" },
@@ -63,13 +64,21 @@ export default function IssuesPage() {
           <span className="text-xs text-skyblue font-medium">
             🔍 '{activeKeywords.split(",").join(", ")}' 기준 필터링 중
           </span>
-          <button
-            type="button"
-            onClick={handleClearKeywords}
-            className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="w-3.5 h-3.5" /> 전체 보기
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              <Settings className="w-3 h-3" /> 키워드 변경
+            </Link>
+            <button
+              type="button"
+              onClick={handleClearKeywords}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" /> 전체 보기
+            </button>
+          </div>
         </div>
       ) : showAll && getCustomKeywordsQuery() ? (
         <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg">

@@ -7,7 +7,8 @@ import type { PolicyListResponse } from "@/types";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import PolicyCard from "@/components/policy/PolicyCard";
-import { Search, X } from "lucide-react";
+import Link from "next/link";
+import { Search, X, Settings } from "lucide-react";
 
 export default function PolicyPage() {
   const [data, setData] = useState<PolicyListResponse | null>(null);
@@ -47,13 +48,21 @@ export default function PolicyPage() {
           <span className="text-xs text-skyblue font-medium">
             🔍 '{activeKeywords.split(",").join(", ")}' 기준 필터링 중
           </span>
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="w-3.5 h-3.5" /> 전체 보기
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              <Settings className="w-3 h-3" /> 키워드 변경
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" /> 전체 보기
+            </button>
+          </div>
         </div>
       ) : showAll && getCustomKeywordsQuery() ? (
         <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg">
