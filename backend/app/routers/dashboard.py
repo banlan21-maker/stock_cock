@@ -543,18 +543,11 @@ async def get_theme_trend(
     else:
         stocks.sort(key=lambda x: x["change_rate"], reverse=True)
 
-    # 종목명 보완 (병합된 최대 300개)
-    try:
-        from pykrx import stock as pykrx_stock
-        for item in stocks:
-            if "name" not in item or item.get("name") == item.get("code"):
-                try:
-                    item["name"] = pykrx_stock.get_market_ticker_name(item["code"]) or item["code"]
-                except Exception:
-                    item["name"] = item["code"]
-    except ImportError:
-        for item in stocks:
-            item["name"] = item.get("name", item["code"])
+    # 종목명 보완: stock_list 캐시를 dict로 변환해 O(1) 조회 (개별 pykrx API 호출 제거)
+    stock_name_map = {s["code"]: s["name"] for s in stock_service.get_stock_list()}
+    for item in stocks:
+        if "name" not in item or not item.get("name") or item.get("name") == item.get("code"):
+            item["name"] = stock_name_map.get(item["code"], item.get("name", item["code"]))
 
     theme_groups = await _classify_themes(stocks)
 
@@ -587,11 +580,19 @@ async def get_keyword_feed(keywords: str = Query(..., description="쉼표 구분
 
     # ── 2. FinanceDataReader로 실제 상장 여부 + 현재가 검증 ──
     async def verify_stock(s: dict) -> dict | None:
-        """종목코드가 실제 상장 중이고 현재가를 조회할 수 있으면 enriched dict 반환."""
+        """종목코드가 실제 상장 중이고 현재가를 조회할 수 있으면 enriched dict 반환.
+        개별 타임아웃 8초 — 상폐/데이터없음 종목이 전체 응답을 막지 않도록."""
         code = str(s.get("code", "")).strip().zfill(6)
         if not code.isdigit() or len(code) != 6:
             return None
-        price = await stock_service.get_stock_price_async(code, False)
+        try:
+            price = await asyncio.wait_for(
+                stock_service.get_stock_price_async(code, False),
+                timeout=8.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("verify_stock timeout [%s]", code)
+            return None
         if not price:
             return None
         return {
@@ -603,7 +604,7 @@ async def get_keyword_feed(keywords: str = Query(..., description="쉼표 구분
             "reason": s.get("reason", ""),
         }
 
-    verify_tasks = [verify_stock(s) for s in raw_stocks[:15]]  # 최대 15개 검증
+    verify_tasks = [verify_stock(s) for s in raw_stocks[:12]]  # 최대 15→12개로 축소
     verified_results = await asyncio.gather(*verify_tasks)
     verified_stocks = [r for r in verified_results if r is not None][:10]
 

@@ -29,6 +29,14 @@ _STOCK_LIST_CACHE_TTL: float = 3600.0     # 1시간마다 자동 갱신
 # 캐시 TTL (초)
 _CACHE_TTL_PRICE = 180  # 3분
 
+# 실패 종목 단기 캐시 (상폐/데이터없음 종목 반복 재시도 방지)
+_PRICE_FAIL_CACHE: dict[str, float] = {}   # code → 실패 시각
+_PRICE_FAIL_TTL: float = 600.0             # 10분간 재시도 스킵
+
+# fdr.StockListing('KRX') 실패 회로 차단기 (KRX API 불안정 대응)
+_FDR_KRX_FAIL_TS: float = 0.0             # 마지막 실패 시각
+_FDR_KRX_FAIL_TTL: float = 1800.0         # 30분간 스킵
+
 
 # ---------------------------------------------------------------------------
 # 유틸 — fdr 컬럼명 유연 탐색
@@ -198,18 +206,25 @@ def get_stock_list(force_refresh: bool = False) -> list[dict]:
     elif STOCK_LIST_CACHE and age >= _STOCK_LIST_CACHE_TTL:
         logger.info("STOCK_LIST_CACHE TTL 만료 (%.0f초) — 갱신", age)
 
-    # 1) fdr.StockListing("KRX")
-    try:
-        df = fdr.StockListing("KRX")
-        result = _parse_fdr_listing_df(df)
-        if result:
-            STOCK_LIST_CACHE = result
-            _STOCK_LIST_CACHE_TS = time.time()
-            logger.info("KRX 종목 목록 fdr(KRX) 로드 완료: %d종목", len(result))
-            return STOCK_LIST_CACHE
-        logger.warning("fdr.StockListing('KRX') 빈 결과 → KOSPI/KOSDAQ 분리 시도")
-    except Exception as e:
-        logger.warning("fdr.StockListing('KRX') 실패: %s → KOSPI/KOSDAQ 분리 시도", e)
+    # 1) fdr.StockListing("KRX") — 최근 30분 내 실패 이력 있으면 스킵 (KRX API 불안정 대응)
+    global _FDR_KRX_FAIL_TS
+    if (time.time() - _FDR_KRX_FAIL_TS) > _FDR_KRX_FAIL_TTL:
+        try:
+            df = fdr.StockListing("KRX")
+            result = _parse_fdr_listing_df(df)
+            if result:
+                STOCK_LIST_CACHE = result
+                _STOCK_LIST_CACHE_TS = time.time()
+                logger.info("KRX 종목 목록 fdr(KRX) 로드 완료: %d종목", len(result))
+                return STOCK_LIST_CACHE
+            logger.warning("fdr.StockListing('KRX') 빈 결과 → KOSPI/KOSDAQ 분리 시도")
+            _FDR_KRX_FAIL_TS = time.time()
+        except Exception as e:
+            logger.warning("fdr.StockListing('KRX') 실패: %s → KOSPI/KOSDAQ 분리 시도", e)
+            _FDR_KRX_FAIL_TS = time.time()
+    else:
+        logger.debug("fdr.StockListing('KRX') 최근 실패 기록 → 스킵 (%.0f초 남음)",
+                     _FDR_KRX_FAIL_TTL - (time.time() - _FDR_KRX_FAIL_TS))
 
     # 2) KOSPI + KOSDAQ + KONEX 분리
     try:
@@ -339,6 +354,11 @@ async def get_stock_price_async(code: str, fundamentals: bool = True) -> dict | 
     1차: KIS API (한국 네트워크에서만 접근 가능)
     2차: FDR + pykrx 폴백 (GCP Cloud Functions 등 해외 서버용)
     """
+    # 최근 실패 종목은 즉시 None 반환 (상폐/데이터없음 종목 반복 시도 방지)
+    fail_ts = _PRICE_FAIL_CACHE.get(code)
+    if fail_ts and (time.time() - fail_ts) < _PRICE_FAIL_TTL:
+        return None
+
     cache_key = f"stock_price:{code}:{fundamentals}"
     cached = get_generic_cache(cache_key)
     if cached:
@@ -353,6 +373,9 @@ async def get_stock_price_async(code: str, fundamentals: bool = True) -> dict | 
 
     if result:
         set_generic_cache(cache_key, result, _CACHE_TTL_PRICE)
+    else:
+        # 데이터 없는 종목은 10분간 재시도 스킵
+        _PRICE_FAIL_CACHE[code] = time.time()
     return result
 
 
@@ -596,17 +619,9 @@ def _get_yfinance_ticker(code: str):
         # 확실히 코스피 → .KS 만 시도
         return yf.Ticker(f"{code}.KS"), f"{code}.KS"
 
-    # market 정보가 'KRX' 또는 없는 경우 → .KS 먼저, 데이터 없으면 .KQ
-    st_ks = yf.Ticker(f"{code}.KS")
-    try:
-        info_ks = st_ks.info or {}
-        if info_ks.get("shortName") or info_ks.get("longName"):
-            return st_ks, f"{code}.KS"
-    except Exception:
-        pass
-
-    st_kq = yf.Ticker(f"{code}.KQ")
-    return st_kq, f"{code}.KQ"
+    # market 정보가 'KRX' 또는 없는 경우 → .KS 기본값 (info HTTP 호출 제거)
+    # info 조회로 시장 탐지 시 1-2초 추가 소요되므로 제거. KIS/FDR이 주 데이터 소스.
+    return yf.Ticker(f"{code}.KS"), f"{code}.KS"
 
 
 def _fill_from_financial_statements(st, result: dict) -> None:
