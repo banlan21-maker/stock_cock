@@ -465,13 +465,13 @@ async def _try_fdr_price(code: str, fundamentals: bool) -> dict | None:
                 import yfinance as yf
                 yf_hist = await asyncio.to_thread(lambda: yf.Ticker(ticker_str).history(period="5d"))
                 if yf_hist.empty:
-                    logger.warning("FDR + yfinance 가격 폴백 모두 빈 결과 [%s]", code)
-                    return None
+                    logger.warning("FDR + yfinance 가격 폴백 모두 빈 결과 [%s] → pykrx 시도", code)
+                    return await _try_pykrx_price(code, fundamentals)
                 df = yf_hist
                 logger.info("yfinance 가격 폴백 사용 [%s] (%s)", code, ticker_str)
             except Exception as e:
-                logger.warning("yfinance 가격 폴백 실패 [%s]: %s → None 반환", code, e)
-                return None
+                logger.warning("yfinance 가격 폴백 실패 [%s]: %s → pykrx 시도", code, e)
+                return await _try_pykrx_price(code, fundamentals)
 
         latest = df.iloc[-1]
         prev = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
@@ -549,6 +549,104 @@ async def _try_fdr_price(code: str, fundamentals: bool) -> dict | None:
     except Exception as e:
         logger.error("FDR 폴백도 실패 [%s]: %s", code, e, exc_info=True)
         return None
+
+
+# ── pykrx 가격 폴백 (FDR + yfinance 모두 실패 시, KOSDAQ 소형주 대응) ─────────
+
+def _get_pykrx_ohlcv(code: str) -> dict | None:
+    """pykrx로 최근 거래일 OHLCV + 전일비 등락률 조회."""
+    try:
+        from pykrx import stock as pykrx_stock
+        end = datetime.now()
+        start = (end - timedelta(days=10)).strftime("%Y%m%d")
+        end_str = end.strftime("%Y%m%d")
+        df = pykrx_stock.get_market_ohlcv(start, end_str, code)
+        if df is None or df.empty:
+            return None
+        latest = df.iloc[-1]
+        prev = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
+        close = float(latest.get("종가", 0))
+        prev_close = float(prev.get("종가", close))
+        if close <= 0:
+            return None
+        change = close - prev_close
+        change_rate = round((change / prev_close) * 100, 2) if prev_close else 0
+        return {
+            "close": close,
+            "open": float(latest.get("시가", close)),
+            "high": float(latest.get("고가", close)),
+            "low": float(latest.get("저가", close)),
+            "volume": int(latest.get("거래량", 0)),
+            "change": change,
+            "change_rate": change_rate,
+        }
+    except Exception as e:
+        logger.warning("_get_pykrx_ohlcv [%s]: %s", code, e)
+        return None
+
+
+async def _try_pykrx_price(code: str, fundamentals: bool) -> dict | None:
+    """pykrx로 현재가 조회 (FDR + yfinance 모두 실패 시 폴백, KOSDAQ 소형주 대응)."""
+    pk_data = await asyncio.to_thread(_get_pykrx_ohlcv, code)
+    if not pk_data:
+        logger.warning("pykrx 가격 폴백도 실패 [%s]", code)
+        return None
+    logger.info("pykrx 가격 폴백 사용 [%s]", code)
+
+    stocks = get_stock_list()
+    name = code
+    for s in stocks:
+        if s["code"] == code:
+            name = s["name"]
+            break
+    if name == code:
+        pn = await asyncio.to_thread(_pykrx_name, code)
+        if pn:
+            name = pn
+
+    pbr, roe = None, None
+    debt_ratio, rev_growth, op_margin, ocf = None, None, None, None
+    eng_name = None
+    supply_str = "정보 없음"
+    investor: dict = {}
+
+    if fundamentals:
+        today_str = datetime.now().strftime("%Y%m%d")
+        pk, yf, supply_res = await asyncio.gather(
+            asyncio.to_thread(_get_pykrx_fundamentals, code),
+            asyncio.to_thread(_get_yfinance_fundamentals, code),
+            asyncio.to_thread(_get_supply_pct_and_float, code, today_str),
+        )
+        supply_pct_val, market_cap_val, supply_str = supply_res
+        investor = {
+            "display": supply_str,
+            "supply_pct": supply_pct_val,
+            "market_cap": market_cap_val,
+        }
+        pbr = pk.get("PBR") or yf.get("PBR")
+        roe = pk.get("ROE") or yf.get("ROE")
+        debt_ratio = yf.get("부채비율")
+        rev_growth = yf.get("매출성장률")
+        op_margin = yf.get("영업이익률")
+        ocf = yf.get("영업활동현금흐름")
+        eng_name = yf.get("영문종목명")
+
+    return {
+        "code": code, "name": name,
+        "current_price": pk_data["close"],
+        "change": pk_data["change"], "change_rate": pk_data["change_rate"],
+        "volume": pk_data["volume"],
+        "high": pk_data["high"],
+        "low": pk_data["low"],
+        "pbr": pbr, "roe": roe,
+        "per": None, "eps": None, "bps": None, "market_cap": None,
+        "debt_ratio": debt_ratio, "revenue_growth": rev_growth,
+        "operating_margin": op_margin, "operating_cashflow": ocf,
+        "영문종목명": eng_name,
+        "가성비 점수": pbr, "장사 수완": roe,
+        "수급": supply_str, "_investor": investor,
+        "_source": "pykrx",
+    }
 
 
 # ── FDR 폴백용 내부 함수들 ────────────────────────────────────────────────────
