@@ -1,9 +1,0 @@
-{
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
-  "/(app)/issues/[id]/page": "app/(app)/issues/[id]/page.js",
-  "/(app)/issues/page": "app/(app)/issues/page.js",
-  "/(app)/policy/[id]/page": "app/(app)/policy/[id]/page.js",
-  "/(app)/policy/page": "app/(app)/policy/page.js",
-  "/(app)/stock/page": "app/(app)/stock/page.js",
-  "/page": "app/page.js"
-}

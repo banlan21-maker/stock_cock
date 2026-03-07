@@ -28,6 +28,7 @@ frontend/out/
 dist/
 build/
 *.log
+.firebase/
 
 # 임시/개발용 출력
 install_log.txt
