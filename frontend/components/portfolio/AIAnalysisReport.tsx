@@ -142,7 +142,7 @@ export default function AIAnalysisReport() {
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
         <p className="text-red-400 text-sm mb-4">{error}</p>
         <button
-          onClick={run}
+          onClick={() => run()}
           className="text-xs text-gray-400 hover:text-white flex items-center gap-1 mx-auto"
         >
           <RefreshCw className="w-3 h-3" /> 다시 시도
