@@ -9,6 +9,7 @@ import KeywordFeed from "@/components/dashboard/KeywordFeed";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
+import OnboardingGuide from "@/components/ui/OnboardingGuide";
 import { Rocket } from "lucide-react";
 
 export default function DashboardPage() {
@@ -35,6 +36,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <OnboardingGuide />
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Rocket className="w-6 h-6 text-amber-400" />

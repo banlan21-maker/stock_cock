@@ -14,6 +14,7 @@ __pycache__/
 venv/
 .venv/
 ENV/
+backend/Python/
 
 # Node
 node_modules/
@@ -31,6 +32,8 @@ build/
 # 임시/개발용 출력
 install_log.txt
 test_output.txt
+*.log
+frontend/tsconfig.tsbuildinfo
 
 # OS
 .DS_Store
@@ -43,3 +46,8 @@ Thumbs.db
 
 # Claude Code 로컬 설정 (API 키 등 민감정보 포함 가능)
 .claude/
+
+# SSH Keys
+*.key
+*.pem
+*.pub
