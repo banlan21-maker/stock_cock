@@ -99,6 +99,7 @@ def delete_holding(
 
 @router.get("/performance")
 async def get_portfolio_performance(
+    request: Request,
     days: int = Query(90, ge=30, le=365),
     current_user: dict = Depends(get_current_user),
 ):
@@ -108,7 +109,8 @@ async def get_portfolio_performance(
     - 반환: dates, portfolio(%), kospi(%), start_date, period
     """
     user_id = current_user["user_id"]
-    logger.warning("[perf] 요청 도착: user=%s days=%d", user_id[:8], days)
+    auth_hdr = request.headers.get("authorization", "MISSING")
+    logger.warning("[perf] 요청 도착: user=%s days=%d auth=%s", user_id[:8], days, auth_hdr[:20] if auth_hdr != "MISSING" else "MISSING")
 
     # 캐시 확인
     cache_key = f"portfolio:perf:v5:{user_id}:{days}"
