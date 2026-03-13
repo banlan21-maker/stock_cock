@@ -1028,7 +1028,7 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
                     low_col = "Low"
                     close_col = "Close"
                     vol_col = "Volume"
-                    logger.info("직접 HTTP Yahoo Finance 폴백 사용 [%s]", code)
+                    logger.warning("직접 HTTP Yahoo Finance 폴백 사용 [%s]", code)
             except Exception as e:
                 logger.warning("직접 HTTP Yahoo Finance 폴백 실패 [%s]: %s", code, e)
 
