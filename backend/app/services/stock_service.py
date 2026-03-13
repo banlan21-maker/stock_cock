@@ -1038,8 +1038,8 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
         naver_sym = _NAVER_SYMBOL.get(code)
         if naver_sym:
             try:
+                import re as _re
                 import requests as _requests
-                import xml.etree.ElementTree as _ET
                 count_map = {"1m": 35, "3m": 100, "6m": 200, "1y": 400}
                 count = count_map.get(period, 100)
                 url = (
@@ -1052,11 +1052,12 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
                     timeout=15,
                 )
                 resp.raise_for_status()
-                root = _ET.fromstring(resp.content)
+                # EUC-KR XML 파싱 대신 regex로 data 속성 직접 추출
+                raw_text = resp.content.decode("euc-kr", errors="replace")
+                item_data_list = _re.findall(r'data="([^"]+)"', raw_text)
                 rows = []
-                for item in root.iter("item"):
-                    d_str = item.get("data", "")
-                    parts = d_str.split("|")
+                for item_data in item_data_list:
+                    parts = item_data.split("|")
                     if len(parts) < 5:
                         continue
                     date_str, o, h, l, c = parts[0], parts[1], parts[2], parts[3], parts[4]
