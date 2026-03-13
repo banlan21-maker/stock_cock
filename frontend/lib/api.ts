@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const API_TIMEOUT_MS = 20_000;
 const API_TIMEOUT_LONG_MS = 60_000; // AI 분석 등 오래 걸리는 요청용
 

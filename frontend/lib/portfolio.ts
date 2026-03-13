@@ -18,7 +18,7 @@ import type {
   JournalCreateRequest,
 } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 console.log("Portfolio API Config:", { API_BASE, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
 
 // ── 인증 헬퍼 ─────────────────────────────────────────────────────────────────
