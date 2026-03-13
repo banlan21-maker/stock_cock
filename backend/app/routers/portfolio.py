@@ -113,7 +113,7 @@ async def get_portfolio_performance(
     logger.warning("[perf] 요청 도착: user=%s days=%d auth=%s", user_id[:8], days, auth_hdr[:20] if auth_hdr != "MISSING" else "MISSING")
 
     # 캐시 확인
-    cache_key = f"portfolio:perf:v7:{user_id}:{days}"
+    cache_key = f"portfolio:perf:v8:{user_id}:{days}"
     cached = get_generic_cache(cache_key)
     if cached:
         logger.warning("[perf] 캐시 히트: key=%s", cache_key[-20:])
@@ -162,16 +162,15 @@ async def get_portfolio_performance(
     kospi_price_map: dict[str, float] = {}
     try:
         import re as _re
-        import requests as _requests
+        import httpx as _httpx
         _count_map = {"1m": 35, "3m": 100, "6m": 200, "1y": 400}
         _count = _count_map.get(period, 100)
-        _resp = await asyncio.to_thread(
-            lambda: _requests.get(
+        async with _httpx.AsyncClient() as _client:
+            _resp = await _client.get(
                 f"https://fchart.stock.naver.com/sise.nhn?symbol=KOSPI&timeframe=day&count={_count}&requestType=0",
                 headers={"User-Agent": "Mozilla/5.0"},
                 timeout=15,
             )
-        )
         _resp.raise_for_status()
         _raw = _resp.content.decode("euc-kr", errors="replace")
         _items = _re.findall(r'data="([^"]+)"', _raw)
