@@ -51,6 +51,7 @@ async function proxyRequest(
     status: upstream.status,
     headers: {
       "Content-Type": contentType || "application/json",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }
