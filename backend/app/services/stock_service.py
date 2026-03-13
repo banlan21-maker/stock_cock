@@ -962,6 +962,32 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
         except Exception as e:
             logger.warning("yfinance 차트 폴백 실패 [%s]: %s", code, e)
 
+    # 3차: pykrx 지수 폴백 (KS11/KQ11 등 FDR·yfinance 모두 실패 시)
+    if (df is None or df.empty or close_col is None) and _PYKRX_AVAILABLE:
+        _INDEX_PYKRX = {"KS11": "1028", "KQ11": "2001"}
+        pykrx_idx = _INDEX_PYKRX.get(code)
+        if pykrx_idx:
+            try:
+                from pykrx import stock as pykrx_stock
+                _start = datetime.now() - timedelta(days=days)
+                df_pkrx = pykrx_stock.get_index_ohlcv_by_date(
+                    _start.strftime("%Y%m%d"),
+                    datetime.now().strftime("%Y%m%d"),
+                    pykrx_idx,
+                )
+                if not df_pkrx.empty:
+                    df = df_pkrx
+                    df.index = pd.to_datetime(df.index)
+                    cols = df.columns.tolist()
+                    open_col  = next((c for c in cols if c in ("시가", "Open")), None)
+                    high_col  = next((c for c in cols if c in ("고가", "High")), None)
+                    low_col   = next((c for c in cols if c in ("저가", "Low")), None)
+                    close_col = next((c for c in cols if c in ("종가", "Close")), None)
+                    vol_col   = next((c for c in cols if c in ("거래량", "Volume")), None)
+                    logger.info("pykrx 지수 차트 폴백 사용 [%s → %s]", code, pykrx_idx)
+            except Exception as e:
+                logger.warning("pykrx 지수 차트 폴백 실패 [%s]: %s", code, e)
+
     if df is None or df.empty:
         logger.warning("차트 데이터 비어있음: code=%s period=%s", code, period)
         return None
