@@ -111,7 +111,7 @@ async def get_portfolio_performance(
     logger.warning("[perf] 요청 도착: user=%s days=%d", user_id[:8], days)
 
     # 캐시 확인
-    cache_key = f"portfolio:perf:v4:{user_id}:{days}"
+    cache_key = f"portfolio:perf:v5:{user_id}:{days}"
     cached = get_generic_cache(cache_key)
     if cached:
         logger.warning("[perf] 캐시 히트: key=%s", cache_key[-20:])

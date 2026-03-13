@@ -984,7 +984,7 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
                     low_col   = next((c for c in cols if c in ("저가", "Low")), None)
                     close_col = next((c for c in cols if c in ("종가", "Close")), None)
                     vol_col   = next((c for c in cols if c in ("거래량", "Volume")), None)
-                    logger.info("pykrx 지수 차트 폴백 사용 [%s → %s]", code, pykrx_idx)
+                    logger.warning("pykrx 지수 차트 폴백 사용 [%s → %s]", code, pykrx_idx)
             except Exception as e:
                 logger.warning("pykrx 지수 차트 폴백 실패 [%s]: %s", code, e)
 
@@ -1031,6 +1031,60 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
                     logger.warning("직접 HTTP Yahoo Finance 폴백 사용 [%s]", code)
             except Exception as e:
                 logger.warning("직접 HTTP Yahoo Finance 폴백 실패 [%s]: %s", code, e)
+
+    # 5차: NAVER 증권 fchart API (KS11/KQ11 전용, 국내 서버에서 항상 동작)
+    if (df is None or df.empty or close_col is None) and code in ("KS11", "KQ11"):
+        _NAVER_SYMBOL = {"KS11": "KOSPI", "KQ11": "KOSDAQ"}
+        naver_sym = _NAVER_SYMBOL.get(code)
+        if naver_sym:
+            try:
+                import requests as _requests
+                import xml.etree.ElementTree as _ET
+                count_map = {"1m": 35, "3m": 100, "6m": 200, "1y": 400}
+                count = count_map.get(period, 100)
+                url = (
+                    f"https://fchart.stock.naver.com/sise.nhn"
+                    f"?symbol={naver_sym}&timeframe=day&count={count}&requestType=0"
+                )
+                resp = _requests.get(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                root = _ET.fromstring(resp.content)
+                rows = []
+                for item in root.iter("item"):
+                    d_str = item.get("data", "")
+                    parts = d_str.split("|")
+                    if len(parts) < 5:
+                        continue
+                    date_str, o, h, l, c = parts[0], parts[1], parts[2], parts[3], parts[4]
+                    vol = parts[5] if len(parts) > 5 else "0"
+                    try:
+                        rows.append({
+                            "date": pd.to_datetime(date_str, format="%Y%m%d"),
+                            "Open": float(o) if o else None,
+                            "High": float(h) if h else None,
+                            "Low": float(l) if l else None,
+                            "Close": float(c) if c else None,
+                            "Volume": float(vol) if vol else 0,
+                        })
+                    except ValueError:
+                        continue
+                if rows:
+                    df_naver = pd.DataFrame(rows).set_index("date")
+                    df_naver = df_naver.dropna(subset=["Close"])
+                    if not df_naver.empty:
+                        df = df_naver
+                        open_col = "Open"
+                        high_col = "High"
+                        low_col = "Low"
+                        close_col = "Close"
+                        vol_col = "Volume"
+                        logger.warning("NAVER fchart 폴백 사용 [%s → %s]", code, naver_sym)
+            except Exception as e:
+                logger.warning("NAVER fchart 폴백 실패 [%s]: %s", code, e)
 
     if df is None or df.empty:
         logger.warning("차트 데이터 비어있음: code=%s period=%s", code, period)
