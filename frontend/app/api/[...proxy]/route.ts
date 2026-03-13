@@ -57,6 +57,8 @@ async function proxyRequest(
   });
 }
 
+export const dynamic = "force-dynamic";
+
 export const GET = proxyRequest;
 export const POST = proxyRequest;
 export const PUT = proxyRequest;
