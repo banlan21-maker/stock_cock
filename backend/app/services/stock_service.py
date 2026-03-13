@@ -988,6 +988,50 @@ def get_chart_data(code: str, period: str = "3m", interval: str = "daily") -> di
             except Exception as e:
                 logger.warning("pykrx 지수 차트 폴백 실패 [%s]: %s", code, e)
 
+    # 4차: 직접 HTTP → Yahoo Finance JSON API (KS11/KQ11 전용)
+    if (df is None or df.empty or close_col is None) and code in ("KS11", "KQ11"):
+        _YF_URL_MAP = {"KS11": "%5EKS11", "KQ11": "%5EKQ11"}
+        yf_url_code = _YF_URL_MAP.get(code)
+        if yf_url_code:
+            try:
+                import requests as _requests
+                end_ts = int(datetime.now().timestamp())
+                start_ts = int((datetime.now() - timedelta(days=days + 10)).timestamp())
+                url = (
+                    f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_url_code}"
+                    f"?period1={start_ts}&period2={end_ts}&interval=1d&events=history"
+                )
+                resp = _requests.get(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                chart_data = resp.json()["chart"]["result"][0]
+                timestamps = chart_data["timestamp"]
+                quote = chart_data["indicators"]["quote"][0]
+                closes = quote.get("close", [])
+                opens = quote.get("open", [None] * len(timestamps))
+                highs = quote.get("high", [None] * len(timestamps))
+                lows = quote.get("low", [None] * len(timestamps))
+                volumes = quote.get("volume", [None] * len(timestamps))
+                dates_idx = pd.to_datetime(timestamps, unit="s", utc=True).tz_convert("Asia/Seoul").normalize().tz_localize(None)
+                df_http = pd.DataFrame(
+                    {"Open": opens, "High": highs, "Low": lows, "Close": closes, "Volume": volumes},
+                    index=dates_idx,
+                )
+                df_http = df_http.dropna(subset=["Close"])
+                if not df_http.empty:
+                    df = df_http
+                    open_col = "Open"
+                    high_col = "High"
+                    low_col = "Low"
+                    close_col = "Close"
+                    vol_col = "Volume"
+                    logger.info("직접 HTTP Yahoo Finance 폴백 사용 [%s]", code)
+            except Exception as e:
+                logger.warning("직접 HTTP Yahoo Finance 폴백 실패 [%s]: %s", code, e)
+
     if df is None or df.empty:
         logger.warning("차트 데이터 비어있음: code=%s period=%s", code, period)
         return None

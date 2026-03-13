@@ -110,7 +110,7 @@ async def get_portfolio_performance(
     user_id = current_user["user_id"]
 
     # 캐시 확인
-    cache_key = f"portfolio:perf:v2:{user_id}:{days}"
+    cache_key = f"portfolio:perf:v3:{user_id}:{days}"
     cached = get_generic_cache(cache_key)
     if cached:
         return cached
