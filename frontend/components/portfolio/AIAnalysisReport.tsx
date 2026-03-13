@@ -162,7 +162,7 @@ export default function AIAnalysisReport() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold">AI 포트폴리오 진단</h3>
           <button
-            onClick={run}
+            onClick={() => run()}
             className="text-xs text-gray-400 hover:text-white flex items-center gap-1"
           >
             <RefreshCw className="w-3 h-3" /> 재분석
