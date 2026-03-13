@@ -31,6 +31,7 @@ async function proxyRequest(
     body: isBodyMethod ? req.body : undefined,
     // @ts-ignore - Node.js 스트리밍 바디 전달
     duplex: "half",
+    cache: "no-store",
   });
 
   // SSE 스트리밍 (AI 분석 등)
