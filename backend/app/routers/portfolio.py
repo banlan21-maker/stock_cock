@@ -113,7 +113,7 @@ async def get_portfolio_performance(
     logger.warning("[perf] 요청 도착: user=%s days=%d auth=%s", user_id[:8], days, auth_hdr[:20] if auth_hdr != "MISSING" else "MISSING")
 
     # 캐시 확인
-    cache_key = f"portfolio:perf:v6:{user_id}:{days}"
+    cache_key = f"portfolio:perf:v7:{user_id}:{days}"
     cached = get_generic_cache(cache_key)
     if cached:
         logger.warning("[perf] 캐시 히트: key=%s", cache_key[-20:])
@@ -137,17 +137,12 @@ async def get_portfolio_performance(
     else:
         start_dt = datetime.now() - timedelta(days=days)
 
-    # 각 종목 + KOSPI(KS11) 차트 데이터 병렬 조회
+    # 각 종목 차트 데이터 병렬 조회
     codes = [h["stock_code"] for h in holdings]
     tasks = [stock_service.get_chart_data_async(code, period) for code in codes]
-    tasks.append(stock_service.get_chart_data_async("KS11", period))  # KOSPI
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    stock_charts = list(await asyncio.gather(*tasks, return_exceptions=True))
 
-    stock_charts = results[:-1]
-    kospi_chart = results[-1]
-
-    # 날짜 집합 구성 (모든 종목의 공통 거래일)
-    # 각 종목 dict: {date_str: close_price}
+    # 날짜 집합 구성
     stock_price_maps: list[dict[str, float]] = []
     all_dates: set[str] = set()
 
@@ -163,14 +158,38 @@ async def get_portfolio_performance(
                 all_dates.add(d)
         stock_price_maps.append(price_map)
 
-    # KOSPI 날짜 포함
+    # KOSPI: NAVER fchart API 직접 호출
     kospi_price_map: dict[str, float] = {}
-    if not isinstance(kospi_chart, Exception) and kospi_chart is not None:
-        for pt in kospi_chart["data"]:
-            d = pt["date"]
-            if d >= start_dt.strftime("%Y-%m-%d"):
-                kospi_price_map[d] = pt["close"]
-                all_dates.add(d)
+    try:
+        import re as _re
+        import requests as _requests
+        _count_map = {"1m": 35, "3m": 100, "6m": 200, "1y": 400}
+        _count = _count_map.get(period, 100)
+        _resp = await asyncio.to_thread(
+            lambda: _requests.get(
+                f"https://fchart.stock.naver.com/sise.nhn?symbol=KOSPI&timeframe=day&count={_count}&requestType=0",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=15,
+            )
+        )
+        _resp.raise_for_status()
+        _raw = _resp.content.decode("euc-kr", errors="replace")
+        _items = _re.findall(r'data="([^"]+)"', _raw)
+        for _item in _items:
+            _parts = _item.split("|")
+            if len(_parts) < 5:
+                continue
+            try:
+                _d = f"{_parts[0][:4]}-{_parts[0][4:6]}-{_parts[0][6:8]}"
+                _c = float(_parts[4])
+                if _d >= start_dt.strftime("%Y-%m-%d"):
+                    kospi_price_map[_d] = _c
+                    all_dates.add(_d)
+            except (ValueError, IndexError):
+                continue
+        logger.warning("[perf] KOSPI 직접 조회 완료: %d일치", len(kospi_price_map))
+    except Exception as e:
+        logger.warning("[perf] KOSPI 직접 조회 실패: %s", e)
 
     if not all_dates:
         return {"dates": [], "portfolio": [], "kospi": [], "start_date": None, "period": period}
