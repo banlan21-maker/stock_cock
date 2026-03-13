@@ -108,11 +108,13 @@ async def get_portfolio_performance(
     - 반환: dates, portfolio(%), kospi(%), start_date, period
     """
     user_id = current_user["user_id"]
+    logger.info("[perf] 요청 도착: user=%s days=%d", user_id[:8], days)
 
     # 캐시 확인
     cache_key = f"portfolio:perf:v3:{user_id}:{days}"
     cached = get_generic_cache(cache_key)
     if cached:
+        logger.info("[perf] 캐시 히트: key=%s", cache_key[-20:])
         return cached
 
     # 보유 종목 조회
