@@ -17,5 +17,3 @@ lxml
 pypdf
 OpenDartReader
 openpyxl
-firebase-functions
-firebase-admin
