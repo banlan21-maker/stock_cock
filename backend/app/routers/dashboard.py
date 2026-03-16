@@ -575,30 +575,41 @@ async def get_keyword_feed(keywords: str = Query(..., description="쉼표 구분
 
     kw_str = " ".join(kw_list)
 
-    # ── 1. Gemini 지식 베이스로 관련 상장사 추출 (키워드 통합) ──
+    # ── 1. Gemini 지식 베이스로 관련 상장사 이름 추출 (키워드 통합) ──
     raw_stocks = await gemini_service.extract_stocks_from_keyword(kw_str)
 
-    # ── 2. FinanceDataReader로 실제 상장 여부 + 현재가 검증 ──
+    # ── 2. 종목명 → KRX 실제 DB 검색 → 현재가 검증 ──
     async def verify_stock(s: dict) -> dict | None:
-        """종목코드가 실제 상장 중이고 현재가를 조회할 수 있으면 enriched dict 반환.
-        개별 타임아웃 8초 — 상폐/데이터없음 종목이 전체 응답을 막지 않도록."""
-        code = str(s.get("code", "")).strip().zfill(6)
-        if not code.isdigit() or len(code) != 6:
+        """Gemini가 제안한 종목명을 실제 KRX 종목 DB에서 검색해 코드를 확정.
+        이름이 DB에 없으면 버림 — Gemini 코드 할루시네이션 방지."""
+        name = str(s.get("name", "")).strip()
+        if not name:
             return None
+
+        # 실제 KRX 종목 리스트에서 이름으로 검색
+        matches = await asyncio.to_thread(stock_service.search_stocks, name)
+        if not matches:
+            logger.debug("verify_stock: KRX DB에 없는 종목명 [%s] → 제외", name)
+            return None
+
+        # 가장 잘 맞는 첫 번째 결과 사용 (search_stocks는 부분일치 정렬)
+        best = matches[0]
+        code = best["code"]
+
         try:
             price = await asyncio.wait_for(
                 stock_service.get_stock_price_async(code, False),
                 timeout=8.0,
             )
         except asyncio.TimeoutError:
-            logger.warning("verify_stock timeout [%s]", code)
+            logger.warning("verify_stock timeout [%s %s]", code, name)
             return None
         if not price:
             return None
         return {
             "code": code,
-            "name": price.get("name") or s.get("name", ""),
-            "market": "KRX",
+            "name": price.get("name") or best.get("name", name),
+            "market": best.get("market", "KRX"),
             "current_price": price.get("current_price"),
             "change_rate": price.get("change_rate"),
             "reason": s.get("reason", ""),
