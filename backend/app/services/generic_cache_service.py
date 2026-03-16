@@ -61,6 +61,15 @@ def set_generic_cache(cache_key: str, data: Any, ttl_seconds: int) -> None:
         logger.warning("generic_cache SET 실패 [%s]: %s", cache_key, e)
 
 
+def delete_generic_cache(cache_key: str) -> None:
+    """특정 캐시 항목을 즉시 삭제."""
+    try:
+        supabase = get_supabase()
+        supabase.table("generic_kv_cache").delete().eq("cache_key", cache_key).execute()
+    except Exception as e:
+        logger.warning("generic_cache DELETE 실패 [%s]: %s", cache_key, e)
+
+
 def delete_expired_generic_cache(older_than_days: int = 7) -> int:
     """만료된 지 older_than_days 일 이상 지난 행 삭제. 삭제 건수 반환."""
     try:

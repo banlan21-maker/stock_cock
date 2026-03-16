@@ -11,7 +11,7 @@ from typing import Optional
 from app.deps import get_current_user
 from app.limiter import limiter
 from app.services import portfolio_service, portfolio_ai_service, stock_service
-from app.services.generic_cache_service import get_generic_cache, set_generic_cache
+from app.services.generic_cache_service import get_generic_cache, set_generic_cache, delete_generic_cache
 from app.services import journal_service
 from app.services import gemini_service
 
@@ -66,6 +66,7 @@ def add_holding(
     holding = portfolio_service.add_holding(user_id, body.model_dump())
     if not holding:
         raise HTTPException(status_code=500, detail="종목 추가에 실패했습니다.")
+    delete_generic_cache(f"portfolio_analysis_v2:{user_id}")
     return holding
 
 
@@ -81,6 +82,7 @@ def update_holding(
     holding = portfolio_service.update_holding(holding_id, user_id, update_data)
     if not holding:
         raise HTTPException(status_code=404, detail="해당 종목을 찾을 수 없습니다.")
+    delete_generic_cache(f"portfolio_analysis_v2:{user_id}")
     return holding
 
 
@@ -94,6 +96,7 @@ def delete_holding(
     success = portfolio_service.delete_holding(holding_id, user_id)
     if not success:
         raise HTTPException(status_code=404, detail="해당 종목을 찾을 수 없습니다.")
+    delete_generic_cache(f"portfolio_analysis_v2:{user_id}")
 
 
 @router.get("/performance")
