@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -326,27 +325,17 @@ def _days_to_period(days: int) -> str:
     return "1y"
 
 
-@router.get("/analysis/stream")
+@router.get("/analysis")
 @limiter.limit("10/minute")
-async def get_portfolio_analysis_stream(request: Request, current_user: dict = Depends(get_current_user)):
-    """포트폴리오 AI 진단 — SSE 스트리밍.
-
-    이벤트 흐름:
-      event: status → {"step": N, "message": "..."}
-      event: done   → { 포트폴리오 AI 진단 결과 }
-      event: error  → {"message": "...", "code": "..."}
-    """
+async def get_portfolio_analysis(request: Request, current_user: dict = Depends(get_current_user)):
+    """포트폴리오 AI 진단 — 일반 JSON 응답."""
     user_id = current_user["user_id"]
 
     # 현재가 포함 보유 종목 조회
     portfolio_data = await portfolio_service.get_holdings_with_price(user_id)
     holdings = portfolio_data["holdings"]
 
-    return StreamingResponse(
-        portfolio_ai_service.analyze_portfolio_stream(user_id, holdings),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    if not holdings:
+        raise HTTPException(status_code=400, detail="보유 종목이 없습니다.")
+
+    return await portfolio_ai_service.analyze_portfolio(user_id, holdings)

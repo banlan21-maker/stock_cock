@@ -222,7 +222,22 @@ export async function deleteJournalEntry(
   }
 }
 
-// ── AI 진단 SSE 스트리밍 ───────────────────────────────────────────────────────
+// ── AI 진단 ───────────────────────────────────────────────────────────────────
+
+export async function fetchPortfolioAnalysis(): Promise<PortfolioAIAnalysis> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/portfolio/analysis`, {
+    headers,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail ?? `API Error: ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── AI 진단 SSE 스트리밍 (deprecated) ──────────────────────────────────────────
 
 export type PortfolioStreamEvent =
   | { type: "status"; step: number; message: string }

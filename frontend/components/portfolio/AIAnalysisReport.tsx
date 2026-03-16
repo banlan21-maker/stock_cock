@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -10,7 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import AiDisclaimer from "@/components/ui/AiDisclaimer";
-import { fetchPortfolioAnalysisStream } from "@/lib/portfolio";
+import { fetchPortfolioAnalysis } from "@/lib/portfolio";
 import type { PortfolioAIAnalysis } from "@/types";
 
 const RISK_LABEL: Record<string, string> = {
@@ -52,67 +52,27 @@ function ScoreDots({ score }: { score: number }) {
   );
 }
 
-const MAX_AUTO_RETRIES = 2;
-
 export default function AIAnalysisReport() {
-  const [status, setStatus] = useState<{ step: number; message: string } | null>(null);
   const [result, setResult] = useState<PortfolioAIAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const abortRef = useRef<AbortController | null>(null);
-  const autoRetryRef = useRef(0);
 
-  async function run(isAutoRetry = false) {
-    if (!isAutoRetry) {
-      autoRetryRef.current = 0;
-      setResult(null);
-      setError(null);
-    }
+  async function run() {
     setLoading(true);
-    setStatus(null);
-
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    let gotResult = false;
+    setError(null);
+    setResult(null);
     try {
-      for await (const event of fetchPortfolioAnalysisStream(ctrl.signal)) {
-        if (event.type === "status") {
-          setStatus({ step: event.step, message: event.message });
-        } else if (event.type === "done") {
-          gotResult = true;
-          setResult(event.data);
-          setLoading(false);
-        } else if (event.type === "error") {
-          gotResult = true;
-          setError(event.message);
-          setLoading(false);
-        }
-      }
+      const data = await fetchPortfolioAnalysis();
+      setResult(data);
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setError("분석 중 오류가 발생했습니다.");
-      }
+      setError(err instanceof Error ? err.message : "분석 중 오류가 발생했습니다.");
+    } finally {
       setLoading(false);
-      return;
-    }
-
-    // SSE 루프가 done/error 없이 종료된 경우 → 자동 재시도
-    if (!gotResult) {
-      if (autoRetryRef.current < MAX_AUTO_RETRIES) {
-        autoRetryRef.current++;
-        run(true);
-      } else {
-        setError("분석 결과를 받지 못했습니다. 다시 시도해 주세요.");
-        setLoading(false);
-      }
     }
   }
 
   useEffect(() => {
     run();
-    return () => abortRef.current?.abort();
   }, []);
 
   if (loading) {
@@ -120,17 +80,7 @@ export default function AIAnalysisReport() {
       <div className="bg-white/5 border border-white/10 rounded-xl p-8">
         <div className="flex flex-col items-center gap-4">
           <div className="w-8 h-8 border-2 border-skyblue border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">
-            {status ? status.message : "AI 진단 준비 중..."}
-          </p>
-          {status && (
-            <div className="w-full max-w-xs bg-white/5 rounded-full h-1.5">
-              <div
-                className="bg-skyblue h-1.5 rounded-full transition-all duration-500"
-                style={{ width: `${(status.step / 2) * 100}%` }}
-              />
-            </div>
-          )}
+          <p className="text-gray-400 text-sm">AI 진단 중... (30초~1분 소요)</p>
         </div>
       </div>
     );

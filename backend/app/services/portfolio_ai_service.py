@@ -52,6 +52,48 @@ def _build_portfolio_prompt(holdings: list[dict]) -> str:
 JSON만 반환하고 다른 텍스트는 포함하지 마세요."""
 
 
+async def analyze_portfolio(user_id: str, holdings: list[dict]) -> dict:
+    """포트폴리오 AI 진단을 일반 JSON으로 반환한다."""
+    cache_key = f"portfolio_analysis:{user_id}"
+
+    try:
+        cached = await asyncio.to_thread(get_generic_cache, cache_key)
+    except Exception:
+        cached = None
+
+    if cached:
+        return cached
+
+    prompt = _build_portfolio_prompt(holdings)
+    raw = await _call_with_retry(prompt)
+
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    analysis = json.loads(raw.strip())
+
+    from datetime import datetime, timezone
+    result = {
+        "user_id": user_id,
+        "total_stocks": len(holdings),
+        "risk_level": analysis.get("risk_level", "medium"),
+        "sector_analysis": analysis.get("sector_analysis", []),
+        "rebalancing": analysis.get("rebalancing", []),
+        "overall_comment": analysis.get("overall_comment", ""),
+        "overall_score": analysis.get("overall_score", 3),
+        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        await asyncio.to_thread(set_generic_cache, cache_key, result, _CACHE_TTL_SEC)
+    except Exception:
+        pass
+
+    return result
+
+
 async def analyze_portfolio_stream(user_id: str, holdings: list[dict]) -> AsyncGenerator[str, None]:
     """포트폴리오 AI 진단을 SSE 스트림으로 생성한다."""
     try:
