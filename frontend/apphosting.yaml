@@ -5,6 +5,7 @@ runConfig:
   concurrency: 80
   maxInstances: 10
   minInstances: 0
+  maxRequestDuration: 300s
 
 env:
   - variable: NEXT_PUBLIC_API_URL
