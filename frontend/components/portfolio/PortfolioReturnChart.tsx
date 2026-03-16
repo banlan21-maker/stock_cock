@@ -8,7 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
@@ -27,7 +26,6 @@ const PERIODS: Period[] = [
 interface ChartPoint {
   date: string;
   portfolio: number;
-  kospi: number;
 }
 
 function formatDate(dateStr: string): string {
@@ -66,7 +64,6 @@ export default function PortfolioReturnChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [latestPortfolio, setLatestPortfolio] = useState<number | null>(null);
-  const [latestKospi, setLatestKospi] = useState<number | null>(null);
 
   const load = useCallback(async (d: number) => {
     setLoading(true);
@@ -80,11 +77,9 @@ export default function PortfolioReturnChart() {
       const points: ChartPoint[] = res.dates.map((date, i) => ({
         date: formatDate(date),
         portfolio: res.portfolio[i],
-        kospi: res.kospi[i],
       }));
       setData(points);
       setLatestPortfolio(res.portfolio[res.portfolio.length - 1] ?? null);
-      setLatestKospi(res.kospi[res.kospi.length - 1] ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "데이터 불러오기 실패");
     } finally {
@@ -117,11 +112,6 @@ export default function PortfolioReturnChart() {
               >
                 내 포트폴리오 {formatReturn(latestPortfolio)}
               </span>
-              {latestKospi !== null && (
-                <span className="text-gray-400">
-                  KOSPI {formatReturn(latestKospi)}
-                </span>
-              )}
             </div>
           )}
         </div>
@@ -176,33 +166,14 @@ export default function PortfolioReturnChart() {
             />
             <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
             <Tooltip content={<CustomTooltip />} />
-            <Legend
-              iconType="plainline"
-              iconSize={16}
-              formatter={(value) => (
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                  {value === "portfolio" ? "내 포트폴리오" : "KOSPI"}
-                </span>
-              )}
-            />
             <Line
               type="monotone"
               dataKey="portfolio"
-              name="portfolio"
+              name="내 포트폴리오"
               stroke="#38bdf8"
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 4, fill: "#38bdf8" }}
-            />
-            <Line
-              type="monotone"
-              dataKey="kospi"
-              name="kospi"
-              stroke="#6b7280"
-              strokeWidth={1.5}
-              strokeDasharray="4 4"
-              dot={false}
-              activeDot={{ r: 3, fill: "#6b7280" }}
             />
           </LineChart>
         </ResponsiveContainer>

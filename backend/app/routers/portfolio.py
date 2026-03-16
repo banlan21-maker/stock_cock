@@ -158,38 +158,6 @@ async def get_portfolio_performance(
                 all_dates.add(d)
         stock_price_maps.append(price_map)
 
-    # KOSPI: NAVER fchart API 직접 호출
-    kospi_price_map: dict[str, float] = {}
-    try:
-        import re as _re
-        import httpx as _httpx
-        _count_map = {"1m": 35, "3m": 100, "6m": 200, "1y": 400}
-        _count = _count_map.get(period, 100)
-        async with _httpx.AsyncClient() as _client:
-            _resp = await _client.get(
-                f"https://fchart.stock.naver.com/sise.nhn?symbol=KOSPI&timeframe=day&count={_count}&requestType=0",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=15,
-            )
-        _resp.raise_for_status()
-        _raw = _resp.content.decode("euc-kr", errors="replace")
-        _items = _re.findall(r'data="([^"]+)"', _raw)
-        for _item in _items:
-            _parts = _item.split("|")
-            if len(_parts) < 5:
-                continue
-            try:
-                _d = f"{_parts[0][:4]}-{_parts[0][4:6]}-{_parts[0][6:8]}"
-                _c = float(_parts[4])
-                if _d >= start_dt.strftime("%Y-%m-%d"):
-                    kospi_price_map[_d] = _c
-                    all_dates.add(_d)
-            except (ValueError, IndexError):
-                continue
-        logger.warning("[perf] KOSPI 직접 조회 완료: %d일치", len(kospi_price_map))
-    except Exception as e:
-        logger.warning("[perf] KOSPI 직접 조회 실패: %s", e)
-
     if not all_dates:
         return {"dates": [], "portfolio": [], "kospi": [], "start_date": None, "period": period}
 
@@ -217,13 +185,8 @@ async def get_portfolio_performance(
         ffill(pm, sorted_dates) for pm in stock_price_maps
     ]
 
-    # KOSPI ffill
-    kospi_filled = ffill(kospi_price_map, sorted_dates)
-    kospi_start = next((v for v in kospi_filled if v is not None), None)
-
     # 수익률 계산
     portfolio_returns: list[float] = []
-    kospi_returns: list[float] = []
 
     for j, d in enumerate(sorted_dates):
         # 포트폴리오 평가금액
@@ -242,17 +205,10 @@ async def get_portfolio_performance(
             ret = (eval_amount - total_invest) / total_invest * 100
             portfolio_returns.append(round(ret, 4))
 
-        # KOSPI 수익률
-        kp = kospi_filled[j]
-        if kp is not None and kospi_start is not None and kospi_start > 0:
-            kospi_returns.append(round((kp / kospi_start - 1) * 100, 4))
-        else:
-            kospi_returns.append(kospi_returns[-1] if kospi_returns else 0.0)
-
     result = {
         "dates": sorted_dates,
         "portfolio": portfolio_returns,
-        "kospi": kospi_returns,
+        "kospi": [],
         "start_date": sorted_dates[0] if sorted_dates else None,
         "period": period,
     }
