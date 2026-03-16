@@ -7,9 +7,3 @@ runConfig:
   minInstances: 0
   maxRequestDuration: 300s
 
-env:
-  - variable: NEXT_PUBLIC_API_URL
-    value: ""
-    availability:
-      - BUILD
-      - RUNTIME
