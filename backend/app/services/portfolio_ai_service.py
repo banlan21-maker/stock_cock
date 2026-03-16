@@ -15,40 +15,73 @@ _CACHE_TTL_SEC = 86400  # 24h
 
 
 def _build_portfolio_prompt(holdings: list[dict]) -> str:
-    """Gemini 포트폴리오 진단 프롬프트를 생성한다."""
+    """Gemini 포트폴리오 진단 프롬프트를 생성한다. 비중은 Python에서 직접 계산."""
+    # 총 평가금액 계산
+    total_eval = sum(
+        float(h.get("eval_amount") or 0) or
+        (float(h.get("current_price") or h.get("avg_price", 0)) * float(h.get("quantity", 0)))
+        for h in holdings
+    )
+
     lines = []
     for h in holdings:
         current = h.get("current_price")
+        avg = float(h.get("avg_price", 0))
+        qty = float(h.get("quantity", 0))
         rate = h.get("profit_rate")
-        lines.append(
-            f"- {h['stock_name']}({h['stock_code']}): "
-            f"수량 {h['quantity']}주, 매입가 {h['avg_price']:,.0f}원, "
-            f"현재가 {current:,.0f}원 ({rate:+.1f}%)" if current else
-            f"- {h['stock_name']}({h['stock_code']}): "
-            f"수량 {h['quantity']}주, 매입가 {h['avg_price']:,.0f}원"
-        )
+        eval_amt = float(h.get("eval_amount") or 0) or (float(current or avg) * qty)
+        weight = (eval_amt / total_eval * 100) if total_eval > 0 else 0
+
+        if current:
+            profit_loss = (float(current) - avg) * qty
+            lines.append(
+                f"- {h['stock_name']}({h['stock_code']}): "
+                f"수량 {qty:,.0f}주, 매입가 {avg:,.0f}원, 현재가 {float(current):,.0f}원, "
+                f"수익률 {rate:+.1f}%, 평가금액 {eval_amt:,.0f}원, 포트폴리오 비중 {weight:.1f}%"
+                f", 손익 {profit_loss:+,.0f}원"
+            )
+        else:
+            lines.append(
+                f"- {h['stock_name']}({h['stock_code']}): "
+                f"수량 {qty:,.0f}주, 매입가 {avg:,.0f}원, 현재가 미조회, 비중 {weight:.1f}%"
+            )
 
     holdings_text = "\n".join(lines)
-    return f"""당신은 한국 주식 포트폴리오 전문 분석가입니다.
-아래 포트폴리오를 분석하고 JSON 형식으로 결과를 반환해주세요.
+    total_invest = sum(float(h.get("avg_price", 0)) * float(h.get("quantity", 0)) for h in holdings)
+    total_profit = total_eval - total_invest
+    total_rate = (total_profit / total_invest * 100) if total_invest > 0 else 0
 
-포트폴리오 보유 종목:
+    return f"""당신은 한국 주식 포트폴리오 전문 분석가입니다.
+아래 포트폴리오 데이터를 분석하고 JSON으로만 응답하세요.
+
+[포트폴리오 요약]
+- 총 매입금액: {total_invest:,.0f}원
+- 총 평가금액: {total_eval:,.0f}원
+- 총 손익: {total_profit:+,.0f}원 ({total_rate:+.1f}%)
+- 보유 종목 수: {len(holdings)}개
+
+[보유 종목 상세 — 비중은 평가금액 기준으로 이미 계산됨]
 {holdings_text}
 
-다음 JSON 형식으로 응답하세요 (한국어로):
+[분석 지침]
+- 위 데이터에 있는 수치만 사용하세요. 없는 데이터를 추측하지 마세요
+- sector_analysis의 ratio 합계가 100%에 가깝도록 실제 비중 기반으로 작성
+- rebalancing은 비중이 50% 초과 종목(집중 리스크), 수익률이 -20% 이하 종목(손절 검토), 0% 비중 종목(현금)에 대해서만 언급
+- overall_comment는 실제 수익률과 비중 데이터를 인용하여 구체적으로 작성
+- overall_score는 총 수익률, 분산도, 리스크를 종합 평가
+
+응답은 반드시 JSON만 출력 (다른 텍스트 없이):
 {{
-  "risk_level": "low|medium|high",
+  "risk_level": "low 또는 medium 또는 high",
   "sector_analysis": [
-    {{"sector": "섹터명", "ratio": 비중(%), "comment": "섹터 분석 코멘트"}}
+    {{"sector": "실제업종명", "ratio": 실제비중숫자, "comment": "이 섹터 비중에 대한 평가 1줄"}}
   ],
   "rebalancing": [
-    {{"action": "reduce|increase|hold", "stock_code": "종목코드", "reason": "추천 이유"}}
+    {{"action": "reduce 또는 increase 또는 hold", "stock_code": "종목코드", "reason": "데이터 기반 구체적 이유"}}
   ],
-  "overall_comment": "전반적인 포트폴리오 평가 (3-5문장)",
-  "overall_score": 1~5 (1=매우 나쁨, 5=매우 좋음)
-}}
-
-섹터는 실제 업종을 기반으로 분류하고, 비중은 평가금액 기준으로 추정하세요.
+  "overall_comment": "실제 수치를 인용한 포트폴리오 전반 평가 (3~5문장)",
+  "overall_score": 1~5정수
+}}\n
 JSON만 반환하고 다른 텍스트는 포함하지 마세요."""
 
 
