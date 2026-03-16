@@ -339,7 +339,26 @@ function JournalCard({ entry, onEdit, onDelete, onAiFeedback, aiFeedbackLoading 
         <p className="text-sm text-gray-400 italic">"{entry.memo}"</p>
       )}
 
-      {/* AI 피드백 — 추후 연결 예정 */}
+      {/* AI 한마디 */}
+      {entry.ai_feedback ? (
+        <div className="rounded-lg px-3 py-2 bg-white/5 border border-white/10 text-xs text-gray-300">
+          <span className="text-skyblue mr-1.5">💡</span>
+          {entry.ai_feedback}
+        </div>
+      ) : (
+        <button
+          onClick={() => onAiFeedback(entry.id)}
+          disabled={aiFeedbackLoading}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-skyblue border border-white/10 hover:border-skyblue/30 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {aiFeedbackLoading ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Sparkles className="w-3 h-3" />
+          )}
+          AI 한마디
+        </button>
+      )}
     </div>
   );
 }

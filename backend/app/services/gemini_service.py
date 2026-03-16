@@ -451,8 +451,8 @@ async def analyze_journal_entry(entry: dict) -> str:
     """투자일지 항목에 대해 꼰대아저씨 스타일 피드백을 한두 문장으로 반환한다."""
     action_kr = "매수" if entry.get("action") == "buy" else "매도"
     total = float(entry.get("price", 0)) * float(entry.get("quantity", 0))
-    prompt = f"""너는 30년 경력의 주식 고수 '꼰대아저씨'야.
-투자자가 방금 주식 거래를 기록했어. 그 결정에 대해 한두 문장으로 짧고 임팩트 있는 피드백을 줘.
+    prompt = f"""당신은 30년 경력의 주식 투자 전문가입니다.
+투자자의 거래 기록을 보고 한 문장으로 핵심을 짚는 조언을 해주세요.
 
 [거래 기록]
 - 종목: {entry.get('stock_name', '')} ({entry.get('stock_code', '') or '코드 없음'})
@@ -464,12 +464,13 @@ async def analyze_journal_entry(entry: dict) -> str:
 - 메모: {entry.get('memo', '') or '(없음)'}
 
 [규칙]
-- 반드시 한두 문장만 (3문장 이상 금지)
-- "임마", "허허", "그래서", "아이고" 같은 꼰대 표현 자연스럽게 섞기
-- 칭찬이든 비판이든 날카롭게
+- 반드시 한 문장만 출력 (두 문장 이상 금지)
+- 경험 많은 선배 투자자가 후배에게 조언하는 말투 — 진중하고 직설적이되 예의 있게
+- 칭찬할 땐 칭찬, 우려될 땐 솔직하게 지적
+- "임마", "허허", "아이고" 같은 반말·비속어 금지
 - JSON이나 마크다운 없이 순수 텍스트만 출력
 
-피드백:"""
+조언:"""
     config = types.GenerateContentConfig(temperature=0.7)
     return await _call_with_retry(prompt, config=config)
 
