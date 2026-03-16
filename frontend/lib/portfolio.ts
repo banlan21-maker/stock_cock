@@ -222,6 +222,25 @@ export async function deleteJournalEntry(
   }
 }
 
+export async function requestJournalAiFeedback(
+  entryId: string
+): Promise<{ ok: boolean; data?: import("@/types").JournalEntry; error?: string }> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE}/api/portfolio/journal/${entryId}/ai-feedback`, {
+      method: "POST",
+      headers,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { ok: false, error: body.detail || `Error ${res.status}` };
+    }
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
 // ── AI 진단 ───────────────────────────────────────────────────────────────────
 
 export async function fetchPortfolioAnalysis(): Promise<PortfolioAIAnalysis> {

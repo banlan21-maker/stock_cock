@@ -79,6 +79,20 @@ def update_journal(entry_id: str, user_id: str, data: dict) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
+def get_journal_entry(entry_id: str, user_id: str) -> Optional[dict]:
+    """단일 투자일지 항목 조회."""
+    client = _get_supabase()
+    result = (
+        client.table("investment_journal")
+        .select("*")
+        .eq("id", entry_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    return result.data if result.data else None
+
+
 def update_journal_feedback(entry_id: str, ai_feedback: str) -> Optional[dict]:
     """AI 피드백만 업데이트한다."""
     client = _get_supabase()

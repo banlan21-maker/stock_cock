@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, Search, BookOpen, ChevronLeft, ChevronRight, X, Loader2 } from "lucide-react";
+import { Plus, Search, BookOpen, ChevronLeft, ChevronRight, X, Loader2, Sparkles } from "lucide-react";
 import {
   fetchJournalEntries,
   createJournalEntry,
   updateJournalEntry,
   deleteJournalEntry,
+  requestJournalAiFeedback,
 } from "@/lib/portfolio";
 import { searchStocks } from "@/lib/api";
 import { useAd } from "@/context/AdProvider";
@@ -265,7 +266,7 @@ function JournalModal({ initial, onClose, onSubmit, saving }: JournalModalProps)
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  AI 피드백 생성 중...
+                  저장 중...
                 </>
               ) : (
                 "저장"
@@ -284,15 +285,16 @@ interface JournalCardProps {
   entry: JournalEntry;
   onEdit: () => void;
   onDelete: () => void;
+  onAiFeedback: (entryId: string) => Promise<void>;
+  aiFeedbackLoading: boolean;
 }
 
-function JournalCard({ entry, onEdit, onDelete }: JournalCardProps) {
+function JournalCard({ entry, onEdit, onDelete, onAiFeedback, aiFeedbackLoading }: JournalCardProps) {
   const isBuy = entry.action === "buy";
   const dateStr = entry.trade_date.slice(0, 10);
 
   return (
-    <div className={`bg-white/5 border rounded-xl p-4 space-y-2 ${isBuy ? "border-red-500/20" : "border-blue-500/20"
-      }`}>
+    <div className={`bg-white/5 border rounded-xl p-4 space-y-2 ${isBuy ? "border-red-500/20" : "border-blue-500/20"}`}>
       {/* 상단: 종목 정보 */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -337,8 +339,8 @@ function JournalCard({ entry, onEdit, onDelete }: JournalCardProps) {
         <p className="text-sm text-gray-400 italic">"{entry.memo}"</p>
       )}
 
-      {/* AI 피드백 말풍선 */}
-      {entry.ai_feedback && (
+      {/* AI 피드백 */}
+      {entry.ai_feedback ? (
         <div className={`rounded-lg p-3 text-sm ${isBuy
             ? "bg-red-400/10 border border-red-400/20 text-red-200"
             : "bg-blue-400/10 border border-blue-400/20 text-blue-200"
@@ -346,6 +348,19 @@ function JournalCard({ entry, onEdit, onDelete }: JournalCardProps) {
           <span className="text-gray-400 text-xs mr-1.5">💬 꼰대:</span>
           {entry.ai_feedback}
         </div>
+      ) : (
+        <button
+          onClick={() => onAiFeedback(entry.id)}
+          disabled={aiFeedbackLoading}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-skyblue border border-white/10 hover:border-skyblue/30 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {aiFeedbackLoading ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Sparkles className="w-3 h-3" />
+          )}
+          AI 한마디
+        </button>
       )}
     </div>
   );
@@ -364,6 +379,7 @@ export default function JournalTab() {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<JournalEntry | null>(null);
   const [saving, setSaving] = useState(false);
+  const [aiFeedbackLoadingId, setAiFeedbackLoadingId] = useState<string | null>(null);
   const { requestInterstitial } = useAd();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -413,17 +429,27 @@ export default function JournalTab() {
 
       setShowModal(false);
       setEditTarget(null);
-
-      // 저장 성공 후 전면 광고 트리거
-      requestInterstitial(() => {
-        alert("저장이 완료되었습니다.");
-        load();
-      });
+      load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "저장 실패");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleAiFeedback(entryId: string) {
+    setAiFeedbackLoadingId(entryId);
+    requestInterstitial(async () => {
+      const result = await requestJournalAiFeedback(entryId);
+      if (result.ok && result.data) {
+        setEntries((prev) =>
+          prev.map((e) => (e.id === entryId ? result.data! : e))
+        );
+      } else {
+        alert(result.error || "AI 피드백 생성에 실패했습니다.");
+      }
+      setAiFeedbackLoadingId(null);
+    });
   }
 
   async function handleDelete(entry: JournalEntry) {
@@ -501,6 +527,8 @@ export default function JournalTab() {
               entry={entry}
               onEdit={() => { setEditTarget(entry); setShowModal(true); }}
               onDelete={() => handleDelete(entry)}
+              onAiFeedback={handleAiFeedback}
+              aiFeedbackLoading={aiFeedbackLoadingId === entry.id}
             />
           ))}
         </div>

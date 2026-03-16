@@ -237,32 +237,13 @@ async def create_journal(
     body: JournalRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """투자일지 항목 생성 → AI 피드백 생성 → 반환."""
+    """투자일지 항목 생성 (AI 피드백 없이 즉시 저장)."""
     user_id = current_user["user_id"]
-
-    # 1. DB에 항목 저장
     entry = await asyncio.to_thread(
         journal_service.create_journal, user_id, body.model_dump()
     )
     if not entry:
         raise HTTPException(status_code=500, detail="일지 저장에 실패했습니다.")
-
-    # 2. AI 피드백 생성
-    try:
-        feedback = await gemini_service.analyze_journal_entry(entry)
-        feedback = feedback.strip()
-    except Exception as e:
-        logger.warning("투자일지 AI 피드백 생성 실패: %s", e)
-        feedback = None
-
-    # 3. AI 피드백 업데이트
-    if feedback:
-        updated = await asyncio.to_thread(
-            journal_service.update_journal_feedback, entry["id"], feedback
-        )
-        if updated:
-            entry = updated
-
     return entry
 
 
@@ -272,33 +253,43 @@ async def update_journal(
     body: JournalRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """투자일지 항목 수정 → AI 피드백 재생성 → 반환."""
+    """투자일지 항목 수정 (AI 피드백 없이 즉시 저장)."""
     user_id = current_user["user_id"]
-
-    # 1. DB 업데이트
     entry = await asyncio.to_thread(
         journal_service.update_journal, entry_id, user_id, body.model_dump()
     )
     if not entry:
         raise HTTPException(status_code=404, detail="해당 일지를 찾을 수 없습니다.")
+    return entry
 
-    # 2. AI 피드백 재생성
+
+@router.post("/journal/{entry_id}/ai-feedback")
+@limiter.limit("20/minute")
+async def generate_journal_ai_feedback(
+    entry_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """투자일지 항목에 대해 꼰대 AI 피드백을 생성하고 DB에 저장한다."""
+    user_id = current_user["user_id"]
+
+    entry = await asyncio.to_thread(
+        journal_service.get_journal_entry, entry_id, user_id
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="해당 일지를 찾을 수 없습니다.")
+
     try:
         feedback = await gemini_service.analyze_journal_entry(entry)
         feedback = feedback.strip()
     except Exception as e:
-        logger.warning("투자일지 AI 피드백 재생성 실패: %s", e)
-        feedback = None
+        logger.error("투자일지 AI 피드백 생성 실패: %s", e)
+        raise HTTPException(status_code=500, detail="AI 피드백 생성에 실패했습니다.")
 
-    # 3. AI 피드백 업데이트
-    if feedback:
-        updated = await asyncio.to_thread(
-            journal_service.update_journal_feedback, entry_id, feedback
-        )
-        if updated:
-            entry = updated
-
-    return entry
+    updated = await asyncio.to_thread(
+        journal_service.update_journal_feedback, entry_id, feedback
+    )
+    return updated or entry
 
 
 @router.delete("/journal/{entry_id}", status_code=204)
