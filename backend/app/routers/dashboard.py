@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 #   daily  → 1시간 TTL (자주 보지만 1시간이면 충분)
 #   weekly → 24시간 TTL (주간 데이터는 하루 한 번이면 충분)
 # ---------------------------------------------------------------------------
-_CACHE_TTL_DAILY  = 60 * 60        # 1시간 (초)
+_CACHE_TTL_DAILY  = 2 * 60 * 60    # 2시간 (크론 간격 2시간에 맞춤)
 _CACHE_TTL_WEEKLY = 24 * 60 * 60   # 24시간 (초)
 _CACHE_TTL_DASHBOARD = 5 * 60     # 대시보드 5분 (초)
 

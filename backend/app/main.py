@@ -41,10 +41,12 @@ async def _prewarm_stock_list() -> None:
 async def lifespan(app: FastAPI):
     """서버 시작/종료 시 실행되는 lifespan 컨텍스트.
 
-    종목 목록 캐시를 백그라운드 태스크로 pre-warm한다.
+    종목 목록 + 테마트렌드 캐시를 백그라운드 태스크로 pre-warm한다.
     create_task()를 사용하므로 lifespan은 즉시 yield → 서버가 바로 요청을 수락한다.
     """
     asyncio.create_task(_prewarm_stock_list())
+    from app.services.warmup_service import warmup_all
+    asyncio.create_task(warmup_all())
     yield
 
 
